@@ -185,6 +185,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .switch input:checked + .switch-track::after { transform: translateX(19px); background: var(--cyan); }
 .setting-select, .setting-input { background: rgba(255,255,255,.07); border: 1px solid var(--line-strong); padding: 8px 10px; color: var(--ink); font-size: 12px; }
 .setting-select option { background: #0a1423; }
+.setting-stack { align-items: flex-start; flex-direction: column; gap: 10px; }
+.setting-url { width: min(100%, 520px); }
+.setting-action-row { display: flex; align-items: center; gap: 12px; padding: 13px 0 5px; }
+.setting-action-row span { color: var(--dim); font-size: 11px; }
 .faq-list { max-width: 760px; }
 .faq-item { border-top: 1px solid var(--line); padding: 18px 0; }
 .faq-item button { width: 100%; text-align: left; background: transparent; display: flex; justify-content: space-between; color: var(--ink); font-weight: 600; font-size: 14px; }

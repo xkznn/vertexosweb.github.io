@@ -14,6 +14,8 @@ type LanguageCode = "en" | "es" | "ar";
 type AppId = "hub" | "archive" | "pulse" | "browser" | "settings" | "games" | "terminal" | "ciri";
 type WindowState = { id: AppId; minimized: boolean };
 type Wallpaper = { id: WallpaperId; name: string; meta: string; video: string };
+type SystemSettings = { optimized: boolean; fastBoot: boolean; idleLock: boolean; confirm: boolean; cloak: string; panicKey: string; panicUrl: string };
+const defaultSettings: SystemSettings = { optimized: false, fastBoot: false, idleLock: false, confirm: false, cloak: "none", panicKey: "`", panicUrl: "" };
 
 const base = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
 const asset = (path: string) => `${base}${path}`;
@@ -152,7 +154,7 @@ function App() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [activeWindow, setActiveWindow] = useState<AppId | null>(null);
-  const [settings, setSettings] = useState(() => storage.read("vertex-settings", { optimized: false, fastBoot: false, idleLock: false, confirm: false, cloak: "none", panicKey: "`" }));
+  const [settings, setSettings] = useState<SystemSettings>(() => ({ ...defaultSettings, ...storage.read<Partial<SystemSettings>>("vertex-settings", {}) }));
   const [updateOpen, setUpdateOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [toasts, setToasts] = useState<{ id: number; title: string; copy: string }[]>([]);
@@ -191,9 +193,10 @@ function App() {
         setStartOpen(false);
         setDrawerOpen(false);
       }
-      if (phase === "desktop" && settings.panicKey && event.key.toLowerCase() === settings.panicKey.toLowerCase()) {
-        setPhase("lock");
-        addToast("Workspace secured", "Panic key engaged. Click the lock screen to resume.");
+      const target = event.target as HTMLElement | null;
+      const isEditing = target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+      if (phase === "desktop" && !isEditing && settings.panicKey && event.key.toLowerCase() === settings.panicKey.toLowerCase()) {
+        redirectPanic();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -223,13 +226,14 @@ function App() {
     setLanguageOpen(false);
   }
 
-  function playWallpaper(video: HTMLVideoElement | null) {
-    if (video) void video.play().catch(() => undefined);
-  }
-
-  function pauseWallpaper(video: HTMLVideoElement | null) {
-    video?.pause();
-  }
+  useEffect(() => {
+    const video = phase === "desktop" ? homeVideoRef.current : phase === "lock" ? lockVideoRef.current : null;
+    if (!video) return;
+    const play = () => void video.play().catch(() => undefined);
+    play();
+    video.addEventListener("canplay", play);
+    return () => video.removeEventListener("canplay", play);
+  }, [phase, wallpaper, lockWallpaper]);
 
   function beginBoot() {
     if (phase !== "boot" || booting) return;
@@ -244,10 +248,26 @@ function App() {
     addToast("Welcome to Vertex-OS", "Workspace restored. Open Config to tune your environment.");
   }
 
-  function updateSetting(key: keyof typeof settings, value: boolean | string) {
+  function updateSetting(key: keyof SystemSettings, value: boolean | string) {
     const next = { ...settings, [key]: value };
     setSettings(next);
     storage.write("vertex-settings", next);
+  }
+
+  function redirectPanic() {
+    const raw = (settings.panicUrl ?? "").trim();
+    if (!raw) {
+      addToast("Panic link missing", "Open Config and add the website to use for the panic redirect.");
+      return;
+    }
+    try {
+      const destination = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+      if (!["http:", "https:"].includes(destination.protocol)) throw new Error("Unsupported protocol");
+      if (settings.confirm && !window.confirm(`Open ${destination.href}?`)) return;
+      window.location.assign(destination.href);
+    } catch {
+      addToast("Invalid panic link", "Use a normal website address such as https://classroom.google.com/");
+    }
   }
 
   function chooseWallpaper(id: WallpaperId) {
@@ -312,7 +332,7 @@ function App() {
       if (phase === "desktop") setContextMenu({ x: event.clientX, y: event.clientY });
     }}>
       <div className="wallpaper-layer">
-        <video ref={homeVideoRef} className="wallpaper-video" src={activeWallpaper.video} preload="auto" muted loop playsInline aria-label={`${activeWallpaper.name} wallpaper`} />
+        <video ref={homeVideoRef} className="wallpaper-video" src={activeWallpaper.video} preload="auto" autoPlay muted loop playsInline aria-label={`${activeWallpaper.name} wallpaper`} />
       </div>
 
       <section className={`boot-screen ${phase !== "boot" ? "hidden" : ""}`} aria-label="Vertex boot sequence">
@@ -330,8 +350,8 @@ function App() {
         </div>
       </section>
 
-      <section className={`lock-screen ${phase === "lock" ? "active" : ""}`} onClick={unlock} onMouseEnter={() => playWallpaper(lockVideoRef.current)} onMouseLeave={() => pauseWallpaper(lockVideoRef.current)} aria-label="Vertex lock screen">
-         <video ref={lockVideoRef} className="lock-wallpaper-video" src={activeLockWallpaper.video} preload="auto" muted loop playsInline aria-label={`${activeLockWallpaper.name} lock wallpaper`} />
+      <section className={`lock-screen ${phase === "lock" ? "active" : ""}`} onClick={unlock} aria-label="Vertex lock screen">
+         <video ref={lockVideoRef} className="lock-wallpaper-video" src={activeLockWallpaper.video} preload="auto" autoPlay muted loop playsInline aria-label={`${activeLockWallpaper.name} lock wallpaper`} />
         <div className="lock-ui">
            <div className="lock-day">{now.toLocaleDateString(localeFor(language), { weekday: "long" }).toUpperCase()}</div>
            <div className="lock-date">{formatDate(now, language)}</div>
@@ -341,7 +361,7 @@ function App() {
          <div className="lock-help">{ui.lockHelp}</div>
       </section>
 
-      <section className={`desktop-shell ${phase === "desktop" ? "active" : ""} ${largeIcons ? "large-icons" : ""}`} onMouseEnter={() => playWallpaper(homeVideoRef.current)} onMouseLeave={() => pauseWallpaper(homeVideoRef.current)}>
+      <section className={`desktop-shell ${phase === "desktop" ? "active" : ""} ${largeIcons ? "large-icons" : ""}`}>
         <header className="hud">
            <div className="hud-topline">{ui.runtime}</div>
            <div className="hud-day">{now.toLocaleDateString(localeFor(language), { weekday: "long" }).toUpperCase()}</div>
@@ -380,7 +400,7 @@ function App() {
           ))}
         </div>
 
-        <WindowLayer windows={windows} activeWindow={activeWindow} onFocus={setActiveWindow} onClose={closeWindow} onMinimize={minimizeWindow} settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} />
+        <WindowLayer windows={windows} activeWindow={activeWindow} onFocus={setActiveWindow} onClose={closeWindow} onMinimize={minimizeWindow} settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} language={language} onLanguageChange={chooseLanguage} onPanic={redirectPanic} />
 
         <div className="fps">VERTEX // 60 FPS</div>
         <nav className="dock" aria-label="System taskbar">
@@ -466,28 +486,31 @@ function App() {
   );
 }
 
-function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, settings, updateSetting, faqOpen, setFaqOpen }: {
+function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, settings, updateSetting, faqOpen, setFaqOpen, language, onLanguageChange, onPanic }: {
   windows: WindowState[];
   activeWindow: AppId | null;
   onFocus: (id: AppId) => void;
   onClose: (id: AppId) => void;
   onMinimize: (id: AppId) => void;
-  settings: { optimized: boolean; fastBoot: boolean; idleLock: boolean; confirm: boolean; cloak: string; panicKey: string };
-  updateSetting: (key: keyof typeof settings, value: boolean | string) => void;
+  settings: SystemSettings;
+  updateSetting: (key: keyof SystemSettings, value: boolean | string) => void;
   faqOpen: number | null;
   setFaqOpen: (value: number | null) => void;
+  language: LanguageCode;
+  onLanguageChange: (language: LanguageCode) => void;
+  onPanic: () => void;
 }) {
   return <div className="window-layer">{windows.map((window) => {
     const app = apps.find((item) => item.id === window.id) ?? apps[0];
     return <article key={window.id} className={`app-window ${activeWindow === window.id ? "active" : ""} ${window.minimized ? "minimized" : ""}`} onMouseDown={() => onFocus(window.id)} style={{ zIndex: activeWindow === window.id ? 40 : 30 }}>
       <header className="window-bar"><span className="window-title">{app.title.toUpperCase()} // VERTEX-OS</span><div className="window-controls"><button className="window-control" onClick={() => onMinimize(window.id)} aria-label={`Minimize ${app.title}`}><Minus size={13} /></button><button className="window-control close" onClick={() => onClose(window.id)} aria-label={`Close ${app.title}`}><X size={13} /></button></div></header>
-      <div className="window-body">{renderWindowBody(window.id, settings, updateSetting, faqOpen, setFaqOpen)}</div>
+       <div className="window-body">{renderWindowBody(window.id, settings, updateSetting, faqOpen, setFaqOpen, language, onLanguageChange, onPanic)}</div>
     </article>;
   })}</div>;
 }
 
-function renderWindowBody(id: AppId, settings: { optimized: boolean; fastBoot: boolean; idleLock: boolean; confirm: boolean; cloak: string; panicKey: string }, updateSetting: (key: keyof typeof settings, value: boolean | string) => void, faqOpen: number | null, setFaqOpen: (value: number | null) => void) {
-  if (id === "settings") return <SettingsSurface settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} />;
+function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (key: keyof SystemSettings, value: boolean | string) => void, faqOpen: number | null, setFaqOpen: (value: number | null) => void, language: LanguageCode, onLanguageChange: (language: LanguageCode) => void, onPanic: () => void) {
+  if (id === "settings") return <SettingsSurface settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} language={language} onLanguageChange={onLanguageChange} onPanic={onPanic} />;
   if (id === "hub") return <div className="window-surface"><div className="surface-kicker">Vertex-Hub / media operating system</div><h2 className="surface-title">Your visual workspace, tuned for the next signal.</h2><p className="surface-copy">A presentation-first environment for the things you watch, play, collect, and return to. Every surface stays close, quiet, and ready.</p><div className="surface-row"><button className="primary-button">Open featured relay</button><button className="outline-button">Browse updates</button></div><div className="hub-grid"><div className="mini-card"><Cloud size={18} color="var(--cyan)" /><strong>Relay status</strong><span>All local surfaces reporting nominal.</span></div><div className="mini-card"><Radio size={18} color="var(--violet)" /><strong>Signal queue</strong><span>Three saved experiences are ready.</span></div><div className="mini-card"><ShieldCheck size={18} color="var(--orange)" /><strong>Session</strong><span>Private local session / no account required.</span></div></div></div>;
   if (id === "archive") return <div className="window-surface"><div className="surface-kicker">Archive / local library</div><h2 className="surface-title">Keep the good signals close.</h2><p className="surface-copy">Your local library is quiet by design. Pin a title from Vertex-Hub and it will appear here the next time you open the vault.</p><div className="hub-grid"><div className="mini-card"><FileStack size={18} color="var(--cyan)" /><strong>Featured queue</strong><span>Nothing pinned yet.</span></div><div className="mini-card"><FolderOpen size={18} color="var(--violet)" /><strong>Collections</strong><span>Four empty shelves waiting.</span></div></div><div className="surface-row"><button className="outline-button"><Upload size={14} /> Import local media</button></div></div>;
   if (id === "pulse") return <div className="window-surface"><div className="surface-kicker">Pulse / audio stream</div><h2 className="surface-title">System Audio</h2><p className="surface-copy">A calm, local playback surface for the background of your workspace. No remote dependencies. Start a signal from the control below.</p><div className="surface-row"><button className="primary-button"><Play size={14} /> Play signal</button><button className="outline-button"><Volume2 size={14} /> Output: workspace</button></div><div className="hub-grid"><div className="mini-card"><Music2 size={18} color="var(--cyan)" /><strong>Current channel</strong><span>Atmospheric / unlisted</span></div><div className="mini-card"><Zap size={18} color="var(--orange)" /><strong>Latency</strong><span>14 ms / local relay</span></div></div></div>;
@@ -496,11 +519,14 @@ function renderWindowBody(id: AppId, settings: { optimized: boolean; fastBoot: b
   return <div className="window-surface"><div className="surface-kicker">Terminal / local runtime</div><h2 className="surface-title">vertex@workspace:~</h2><p className="surface-copy" style={{ fontFamily: "monospace" }}>runtime.status&nbsp;&nbsp;=&nbsp;&nbsp;"nominal"<br />wallpaper.engine&nbsp;&nbsp;=&nbsp;&nbsp;"local/high-resolution"<br />session.mode&nbsp;&nbsp;=&nbsp;&nbsp;"presentation"</p><div className="surface-row"><button className="outline-button"><Code2 size={14} /> Inspect system</button></div></div>;
 }
 
-function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen }: {
-  settings: { optimized: boolean; fastBoot: boolean; idleLock: boolean; confirm: boolean; cloak: string; panicKey: string };
-  updateSetting: (key: keyof typeof settings, value: boolean | string) => void;
+function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, language, onLanguageChange, onPanic }: {
+  settings: SystemSettings;
+  updateSetting: (key: keyof SystemSettings, value: boolean | string) => void;
   faqOpen: number | null;
   setFaqOpen: (value: number | null) => void;
+  language: LanguageCode;
+  onLanguageChange: (language: LanguageCode) => void;
+  onPanic: () => void;
 }) {
   const faqs = [
     ["Movies not working?", "Open Vertex-Web, refresh the Ultraviolet relay, then return to the media surface. This local build keeps remote playback intentionally disabled."],
@@ -512,10 +538,13 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen }: {
     <SettingToggle label="Fast Boot" help="Skips the startup sequence on the next launch." value={settings.fastBoot} onChange={(value) => updateSetting("fastBoot", value)} />
     <SettingToggle label="Idle Lock Screen" help="Locks the workspace after three minutes away." value={settings.idleLock} onChange={(value) => updateSetting("idleLock", value)} />
     <SettingToggle label="Redirect Confirmation" help="Shows a confirmation before leaving this local workspace." value={settings.confirm} onChange={(value) => updateSetting("confirm", value)} />
+     <div className="setting-row"><div><strong>Interface Language</strong><small>Changes the language used across the Vertex session.</small></div><select className="setting-select" value={language} onChange={(event) => onLanguageChange(event.target.value as LanguageCode)} aria-label="Interface language"><option value="en">English</option><option value="es">Español</option><option value="ar">العربية</option></select></div>
     <div className="setting-group"><LockKeyhole size={13} /> Cloaking & stealth</div>
     <div className="setting-row"><div><strong>Tab Cloak</strong><small>Changes the visible tab label for a quieter session.</small></div><select className="setting-select" value={settings.cloak} onChange={(event) => updateSetting("cloak", event.target.value)} aria-label="Tab cloak"><option value="none">None (Vertex-OS)</option><option value="google">Google</option><option value="drive">My Drive</option><option value="canvas">Dashboard</option></select></div>
     <div className="setting-group"><MonitorCog size={13} /> Shortcuts & links</div>
-    <div className="setting-row"><div><strong>Panic Key</strong><small>Quickly lock the workspace.</small></div><input className="setting-input" value={settings.panicKey} maxLength={1} onChange={(event) => updateSetting("panicKey", event.target.value)} aria-label="Panic key" /></div>
+     <div className="setting-row"><div><strong>Panic Key</strong><small>Redirects to your saved panic website.</small></div><input className="setting-input" value={settings.panicKey} maxLength={1} onChange={(event) => updateSetting("panicKey", event.target.value)} aria-label="Panic key" /></div>
+     <div className="setting-row setting-stack"><div><strong>Panic Website</strong><small>Enter the website to open when the panic key is pressed.</small></div><input className="setting-input setting-url" type="url" value={settings.panicUrl} placeholder="https://classroom.google.com/" onChange={(event) => updateSetting("panicUrl", event.target.value)} aria-label="Panic website URL" /></div>
+     <div className="setting-action-row"><button className="outline-button" onClick={onPanic}>Test Panic Redirect</button><span>Opens in this tab.</span></div>
     <button className="setting-row" onClick={() => setFaqOpen(faqOpen === 0 ? null : 0)}><div><strong><CircleHelp size={14} /> System FAQ</strong><small>Troubleshooting and help.</small></div><ChevronDown size={16} /></button>
     {faqOpen !== null && <div className="faq-list">{faqs.map(([question, answer], index) => <div className="faq-item" key={question}><button onClick={() => setFaqOpen(faqOpen === index ? null : index)}>{question}<ChevronDown size={15} /></button>{faqOpen === index && <div className="faq-answer">{answer}</div>}</div>)}</div>}
   </div></div>;
