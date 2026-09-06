@@ -9,7 +9,7 @@ import {
   Settings2, ShieldCheck, Sparkles, Terminal, Upload, Volume2, X, Zap,
 } from "lucide-react";
 
-type WallpaperId = "neon-city" | "orbit-drift" | "quiet-signal";
+type WallpaperId = "neon-city" | "orbit-drift" | "quiet-signal" | "lock-reference";
 type AppId = "hub" | "archive" | "pulse" | "browser" | "settings" | "games" | "terminal" | "ciri";
 type WindowState = { id: AppId; minimized: boolean };
 
@@ -20,6 +20,7 @@ const wallpapers: { id: WallpaperId; name: string; meta: string; src: string }[]
   { id: "neon-city", name: "Neon City", meta: "Urban / midnight", src: asset("wallpapers/neon-city.jpg") },
   { id: "orbit-drift", name: "Orbit Drift", meta: "Deep space / signal", src: asset("wallpapers/orbit-drift.jpg") },
   { id: "quiet-signal", name: "Quiet Signal", meta: "Aurora / refuge", src: asset("wallpapers/quiet-signal.jpg") },
+  { id: "lock-reference", name: "Singularity", meta: "Lockscreen / reference", src: asset("wallpapers/lock-reference.png") },
 ];
 type Wallpaper = (typeof wallpapers)[number];
 
@@ -71,7 +72,7 @@ function App() {
   const [mobileWarning, setMobileWarning] = useState(() => window.innerWidth < 760);
   const [now, setNow] = useState(() => new Date());
   const [wallpaper, setWallpaper] = useState<WallpaperId>(() => storage.read("vertex-wallpaper", "neon-city"));
-  const [lockWallpaper, setLockWallpaper] = useState<WallpaperId>(() => storage.read("vertex-lock-wallpaper", "orbit-drift"));
+  const [lockWallpaper, setLockWallpaper] = useState<WallpaperId>(() => storage.read("vertex-lock-wallpaper", "lock-reference"));
   const [wallpaperOpen, setWallpaperOpen] = useState(false);
   const [wallpaperTarget, setWallpaperTarget] = useState<"both" | "home" | "lock">("both");
   const [loopWallpaper, setLoopWallpaper] = useState(() => storage.read("vertex-loop", false));
@@ -243,11 +244,11 @@ function App() {
       <section className={`lock-screen ${phase === "lock" ? "active" : ""}`} onClick={unlock} aria-label="Vertex lock screen">
         <img className="lock-wallpaper" src={activeLockWallpaper.src} alt="" />
         <div className="lock-ui">
-          <div className="lock-kicker">Vertex-OS / secure session</div>
           <div className="lock-day">{now.toLocaleDateString([], { weekday: "long" }).toUpperCase()}</div>
           <div className="lock-date">{formatDate(now)}</div>
           <div className="lock-time">— {formatClock(now)} —</div>
         </div>
+         <div className="lock-fps">60 FPS</div>
         <div className="lock-help">Click or tap anywhere to unlock workspace</div>
       </section>
 
