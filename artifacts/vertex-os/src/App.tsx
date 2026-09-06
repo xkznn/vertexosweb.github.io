@@ -9,7 +9,7 @@ import {
   Settings2, ShieldCheck, Sparkles, Terminal, Upload, Volume2, X, Zap,
 } from "lucide-react";
 
-type WallpaperId = "neon-city" | "orbit-drift" | "quiet-signal" | "lock-reference";
+type WallpaperId = "singularity" | "neon-city" | "orbit-drift" | "quiet-signal";
 type AppId = "hub" | "archive" | "pulse" | "browser" | "settings" | "games" | "terminal" | "ciri";
 type WindowState = { id: AppId; minimized: boolean };
 
@@ -17,10 +17,10 @@ const base = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL :
 const asset = (path: string) => `${base}${path}`;
 
 const wallpapers: { id: WallpaperId; name: string; meta: string; src: string }[] = [
+  { id: "singularity", name: "Singularity", meta: "Deep space / clean", src: asset("wallpapers/singularity.jpg") },
   { id: "neon-city", name: "Neon City", meta: "Urban / midnight", src: asset("wallpapers/neon-city.jpg") },
   { id: "orbit-drift", name: "Orbit Drift", meta: "Deep space / signal", src: asset("wallpapers/orbit-drift.jpg") },
   { id: "quiet-signal", name: "Quiet Signal", meta: "Aurora / refuge", src: asset("wallpapers/quiet-signal.jpg") },
-  { id: "lock-reference", name: "Singularity", meta: "Lockscreen / reference", src: asset("wallpapers/lock-reference.png") },
 ];
 type Wallpaper = (typeof wallpapers)[number];
 
@@ -71,8 +71,8 @@ function App() {
   const [booting, setBooting] = useState(false);
   const [mobileWarning, setMobileWarning] = useState(() => window.innerWidth < 760);
   const [now, setNow] = useState(() => new Date());
-  const [wallpaper, setWallpaper] = useState<WallpaperId>(() => storage.read("vertex-wallpaper", "neon-city"));
-  const [lockWallpaper, setLockWallpaper] = useState<WallpaperId>(() => storage.read("vertex-lock-wallpaper", "lock-reference"));
+  const [wallpaper, setWallpaper] = useState<WallpaperId>(() => storage.read("vertex-wallpaper-v2", "singularity"));
+  const [lockWallpaper, setLockWallpaper] = useState<WallpaperId>(() => storage.read("vertex-lock-wallpaper-v2", "singularity"));
   const [wallpaperOpen, setWallpaperOpen] = useState(false);
   const [wallpaperTarget, setWallpaperTarget] = useState<"both" | "home" | "lock">("both");
   const [loopWallpaper, setLoopWallpaper] = useState(() => storage.read("vertex-loop", false));
@@ -164,11 +164,11 @@ function App() {
   function chooseWallpaper(id: WallpaperId) {
     if (wallpaperTarget === "both" || wallpaperTarget === "home") {
       setWallpaper(id);
-      storage.write("vertex-wallpaper", id);
+      storage.write("vertex-wallpaper-v2", id);
     }
     if (wallpaperTarget === "both" || wallpaperTarget === "lock") {
       setLockWallpaper(id);
-      storage.write("vertex-lock-wallpaper", id);
+      storage.write("vertex-lock-wallpaper-v2", id);
     }
     addToast("Wallpaper updated", `${wallpapers.find((item) => item.id === id)?.name} is now active.`);
   }
