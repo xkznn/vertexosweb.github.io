@@ -9,7 +9,7 @@ import {
   Settings2, ShieldCheck, Sparkles, Terminal, Upload, Volume2, X, Zap,
 } from "lucide-react";
 
-type WallpaperId = "singularity" | "neon-city" | "orbit-drift" | "quiet-signal";
+type WallpaperId = "singularity" | "snake-skeleton" | "neon-city" | "orbit-drift" | "quiet-signal";
 type LanguageCode = "en" | "es" | "ar";
 type AppId = "hub" | "archive" | "pulse" | "browser" | "settings" | "games" | "terminal" | "ciri";
 type WindowState = { id: AppId; minimized: boolean };
@@ -19,6 +19,7 @@ const asset = (path: string) => `${base}${path}`;
 
 const wallpapers: { id: WallpaperId; name: string; meta: string; src: string; video?: string }[] = [
   { id: "singularity", name: "Singularity", meta: "Deep space / clean", src: asset("wallpapers/singularity.jpg"), video: asset("videos/BlackHole.mp4") },
+  { id: "snake-skeleton", name: "Snake Skeleton", meta: "Video / default", src: asset("wallpapers/singularity.jpg"), video: asset("videos/default.mp4") },
   { id: "neon-city", name: "Neon City", meta: "Urban / midnight", src: asset("wallpapers/neon-city.jpg") },
   { id: "orbit-drift", name: "Orbit Drift", meta: "Deep space / signal", src: asset("wallpapers/orbit-drift.jpg") },
   { id: "quiet-signal", name: "Quiet Signal", meta: "Aurora / refuge", src: asset("wallpapers/quiet-signal.jpg") },
