@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Vertex-OS"
+description = "A cinematic desktop-style media interface inspired by the approved reference site, rebranded as Vertex-OS with crisp high-resolution wallpapers and responsive interactions."
+version = "1.0.0"
+id = "artifacts/vertex-os"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19965
+
+[services.development]
+run = "pnpm --filter @workspace/vertex-os run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/vertex-os", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/vertex-os/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19965"
+BASE_PATH = "/"
