@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -137,6 +137,8 @@ function App() {
   const [now, setNow] = useState(() => new Date());
   const [language, setLanguage] = useState<LanguageCode>(() => storage.read("vertex-language", "en"));
   const [languageOpen, setLanguageOpen] = useState(() => !storage.read("vertex-language-set", false));
+  const homeVideoRef = useRef<HTMLVideoElement>(null);
+  const lockVideoRef = useRef<HTMLVideoElement>(null);
   const [wallpaper, setWallpaper] = useState<WallpaperId>(() => storage.read("vertex-wallpaper-v2", "singularity"));
   const [lockWallpaper, setLockWallpaper] = useState<WallpaperId>(() => storage.read("vertex-lock-wallpaper-v2", "singularity"));
   const [wallpaperOpen, setWallpaperOpen] = useState(false);
@@ -221,6 +223,14 @@ function App() {
     setLanguageOpen(false);
   }
 
+  function playWallpaper(video: HTMLVideoElement | null) {
+    if (video) void video.play().catch(() => undefined);
+  }
+
+  function pauseWallpaper(video: HTMLVideoElement | null) {
+    video?.pause();
+  }
+
   function beginBoot() {
     if (phase !== "boot" || booting) return;
     if (settings.fastBoot) { setPhase("lock"); return; }
@@ -302,7 +312,7 @@ function App() {
       if (phase === "desktop") setContextMenu({ x: event.clientX, y: event.clientY });
     }}>
       <div className="wallpaper-layer">
-        <video className="wallpaper-video" src={activeWallpaper.video} preload="auto" muted loop playsInline onMouseEnter={(event) => void event.currentTarget.play()} onMouseLeave={(event) => event.currentTarget.pause()} aria-label={`${activeWallpaper.name} wallpaper`} />
+        <video ref={homeVideoRef} className="wallpaper-video" src={activeWallpaper.video} preload="auto" muted loop playsInline aria-label={`${activeWallpaper.name} wallpaper`} />
       </div>
 
       <section className={`boot-screen ${phase !== "boot" ? "hidden" : ""}`} aria-label="Vertex boot sequence">
@@ -320,8 +330,8 @@ function App() {
         </div>
       </section>
 
-      <section className={`lock-screen ${phase === "lock" ? "active" : ""}`} onClick={unlock} aria-label="Vertex lock screen">
-         <video className="lock-wallpaper-video" src={activeLockWallpaper.video} preload="auto" muted loop playsInline onMouseEnter={(event) => void event.currentTarget.play()} onMouseLeave={(event) => event.currentTarget.pause()} aria-label={`${activeLockWallpaper.name} lock wallpaper`} />
+      <section className={`lock-screen ${phase === "lock" ? "active" : ""}`} onClick={unlock} onMouseEnter={() => playWallpaper(lockVideoRef.current)} onMouseLeave={() => pauseWallpaper(lockVideoRef.current)} aria-label="Vertex lock screen">
+         <video ref={lockVideoRef} className="lock-wallpaper-video" src={activeLockWallpaper.video} preload="auto" muted loop playsInline aria-label={`${activeLockWallpaper.name} lock wallpaper`} />
         <div className="lock-ui">
            <div className="lock-day">{now.toLocaleDateString(localeFor(language), { weekday: "long" }).toUpperCase()}</div>
            <div className="lock-date">{formatDate(now, language)}</div>
@@ -331,7 +341,7 @@ function App() {
          <div className="lock-help">{ui.lockHelp}</div>
       </section>
 
-      <section className={`desktop-shell ${phase === "desktop" ? "active" : ""} ${largeIcons ? "large-icons" : ""}`}>
+      <section className={`desktop-shell ${phase === "desktop" ? "active" : ""} ${largeIcons ? "large-icons" : ""}`} onMouseEnter={() => playWallpaper(homeVideoRef.current)} onMouseLeave={() => pauseWallpaper(homeVideoRef.current)}>
         <header className="hud">
            <div className="hud-topline">{ui.runtime}</div>
            <div className="hud-day">{now.toLocaleDateString(localeFor(language), { weekday: "long" }).toUpperCase()}</div>
