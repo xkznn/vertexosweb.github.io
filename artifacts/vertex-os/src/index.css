@@ -172,6 +172,57 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .mini-card { border: 1px solid var(--line); padding: 16px; background: rgba(255,255,255,.035); min-height: 105px; }
 .mini-card strong { display: block; font-size: 13px; margin-bottom: 7px; }
 .mini-card span { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.cinefy-surface { min-height: 100%; padding: clamp(20px, 3vw, 38px); background: radial-gradient(circle at 84% 8%, rgba(29,185,84,.14), transparent 30%), #07111b; color: var(--ink); }
+.cinefy-surface audio { display: none; }
+.cinefy-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+.cinefy-brand { display: flex; align-items: center; gap: 15px; }
+.cinefy-brand img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 28px rgba(29,185,84,.28); }
+.cinefy-brand .surface-title { margin: 8px 0 0; font-size: clamp(24px, 3.6vw, 42px); }
+.cinefy-account { color: #1ed760; border: 1px solid rgba(30,215,96,.32); padding: 8px 10px; font-size: 9px; letter-spacing: .12em; white-space: nowrap; }
+.cinefy-search { display: flex; gap: 9px; max-width: 720px; margin-bottom: 26px; }
+.cinefy-search input { flex: 1; min-width: 0; border: 1px solid var(--line-strong); background: rgba(255,255,255,.06); color: var(--ink); padding: 13px 14px; outline: 0; }
+.cinefy-search input:focus { border-color: #1ed760; box-shadow: 0 0 0 2px rgba(30,215,96,.12); }
+.cinefy-search .primary-button { min-width: 118px; background: #1ed760; color: #041108; clip-path: none; padding: 12px 18px; }
+.cinefy-search .primary-button:hover { background: #5ee68d; }
+.cinefy-layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(210px, .75fr); gap: 24px; }
+.cinefy-section-heading { display: flex; justify-content: space-between; align-items: end; gap: 15px; margin-bottom: 10px; }
+.cinefy-section-heading h3 { margin: 6px 0 0; font: 600 19px var(--font-display); }
+.cinefy-section-heading > span { color: var(--dim); font-size: 10px; letter-spacing: .08em; }
+.cinefy-track-list { border-top: 1px solid var(--line); }
+.cinefy-track { display: grid; grid-template-columns: minmax(0, 1fr) auto 28px; align-items: center; gap: 12px; border-bottom: 1px solid rgba(205,225,246,.08); padding: 8px 0; }
+.cinefy-track.active { background: rgba(30,215,96,.07); }
+.cinefy-track-main { min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left; background: transparent; color: var(--ink); }
+.cinefy-track-main img { width: 38px; height: 38px; object-fit: cover; flex: 0 0 auto; }
+.cinefy-track-index { width: 20px; color: var(--dim); font: 10px var(--font-display); text-align: center; }
+.cinefy-track-copy { min-width: 0; }
+.cinefy-track-copy strong, .cinefy-track-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cinefy-track-copy strong { font-size: 12px; }
+.cinefy-track-copy small { color: var(--muted); margin-top: 3px; font-size: 10px; }
+.cinefy-genre { color: var(--dim); font-size: 10px; }
+.cinefy-favorite { color: var(--muted); background: transparent; font-size: 20px; line-height: 1; }
+.cinefy-favorite:hover, .cinefy-favorite.saved { color: #1ed760; }
+.cinefy-empty { border: 1px dashed var(--line-strong); padding: 26px 18px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.cinefy-now { padding: 18px; background: rgba(255,255,255,.045); border: 1px solid var(--line); align-self: start; }
+.cinefy-cover { width: 100%; aspect-ratio: 1; object-fit: cover; margin: 15px 0 17px; }
+.cinefy-now h3 { margin: 0; font-size: 17px; }
+.cinefy-now p { margin: 6px 0 2px; color: var(--ink); font-size: 12px; }
+.cinefy-now > span { display: block; color: var(--muted); font-size: 10px; }
+.cinefy-now a { display: inline-block; margin-top: 20px; color: #1ed760; font-size: 10px; }
+.cinefy-player { display: grid; grid-template-columns: minmax(150px, .8fr) auto minmax(220px, 1.5fr) minmax(100px, .55fr); align-items: center; gap: 18px; margin-top: 25px; padding: 12px 14px; border: 1px solid rgba(30,215,96,.24); background: rgba(3,10,8,.76); }
+.cinefy-player-track { min-width: 0; display: flex; align-items: center; gap: 9px; }
+.cinefy-player-track img { width: 34px; height: 34px; object-fit: cover; }
+.cinefy-player-track strong, .cinefy-player-track span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cinefy-player-track strong { font-size: 11px; }
+.cinefy-player-track span { color: var(--muted); font-size: 10px; margin-top: 3px; }
+.cinefy-controls { display: flex; align-items: center; gap: 11px; }
+.cinefy-controls button { color: var(--muted); background: transparent; }
+.cinefy-controls button:hover { color: #1ed760; }
+.cinefy-play { width: 30px; height: 30px; border-radius: 50%; background: #1ed760 !important; color: #031007 !important; font-size: 12px; }
+.cinefy-progress { display: flex; align-items: center; gap: 8px; color: var(--dim); font: 9px var(--font-display); }
+.cinefy-progress input, .cinefy-volume input { accent-color: #1ed760; min-width: 0; }
+.cinefy-progress input { flex: 1; }
+.cinefy-volume { display: flex; align-items: center; gap: 7px; color: var(--dim); font-size: 9px; letter-spacing: .1em; }
+.cinefy-volume input { width: 70px; }
 .settings-list { max-width: 730px; }
 .setting-group { color: var(--cyan); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; padding: 18px 0 9px; border-bottom: 1px solid var(--line); }
 .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 0; border-bottom: 1px solid rgba(205,225,246,.09); }

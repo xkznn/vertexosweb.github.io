@@ -11,7 +11,7 @@ import {
 
 type WallpaperId = "singularity" | "snake-skeleton" | "snow-fox";
 type LanguageCode = "en" | "es" | "ar";
-type AppId = "hub" | "archive" | "pulse" | "browser" | "settings" | "games" | "terminal" | "ciri";
+type AppId = "hub" | "archive" | "pulse" | "cinefy" | "browser" | "settings" | "games" | "terminal" | "ciri";
 type WindowState = { id: AppId; minimized: boolean };
 type Wallpaper = { id: WallpaperId; name: string; meta: string; video: string };
 type SystemSettings = { optimized: boolean; fastBoot: boolean; idleLock: boolean; confirm: boolean; cloak: string; panicKey: string; panicUrl: string };
@@ -29,6 +29,7 @@ const wallpapers: Wallpaper[] = [
 const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; pinned?: boolean }[] = [
   { id: "hub", title: "Vertex-Hub", subtitle: "media relay", icon: Sparkles, pinned: true },
   { id: "pulse", title: "Pulse", subtitle: "audio stream", icon: Music2, pinned: true },
+  { id: "cinefy", title: "CINEFY", subtitle: "music relay", icon: Music2, pinned: true },
   { id: "archive", title: "Archive", subtitle: "library vault", icon: Archive, pinned: true },
   { id: "browser", title: "Vertex-Web", subtitle: "secure browser", icon: Compass, pinned: true },
   { id: "settings", title: "Config", subtitle: "system control", icon: Settings2, pinned: true },
@@ -122,6 +123,17 @@ const languageOptions: { code: LanguageCode; label: string; native: string }[] =
   { code: "es", label: "Spanish", native: "Español" },
   { code: "ar", label: "Arabic", native: "العربية" },
 ];
+
+type CinefyTrack = {
+  trackId: number;
+  trackName: string;
+  artistName: string;
+  collectionName: string;
+  artworkUrl100: string;
+  previewUrl: string;
+  trackViewUrl: string;
+  primaryGenreName: string;
+};
 
 function BrandMark() {
   return <span className="brand-mark"><span className="brand-glyph"><span /></span><span>Vertex Systems</span></span>;
@@ -511,6 +523,7 @@ function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, sett
 
 function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (key: keyof SystemSettings, value: boolean | string) => void, faqOpen: number | null, setFaqOpen: (value: number | null) => void, language: LanguageCode, onLanguageChange: (language: LanguageCode) => void, onPanic: () => void) {
   if (id === "settings") return <SettingsSurface settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} language={language} onLanguageChange={onLanguageChange} onPanic={onPanic} />;
+  if (id === "cinefy") return <CinefySurface />;
   if (id === "hub") return <div className="window-surface"><div className="surface-kicker">Vertex-Hub / media operating system</div><h2 className="surface-title">Your visual workspace, tuned for the next signal.</h2><p className="surface-copy">A presentation-first environment for the things you watch, play, collect, and return to. Every surface stays close, quiet, and ready.</p><div className="surface-row"><button className="primary-button">Open featured relay</button><button className="outline-button">Browse updates</button></div><div className="hub-grid"><div className="mini-card"><Cloud size={18} color="var(--cyan)" /><strong>Relay status</strong><span>All local surfaces reporting nominal.</span></div><div className="mini-card"><Radio size={18} color="var(--violet)" /><strong>Signal queue</strong><span>Three saved experiences are ready.</span></div><div className="mini-card"><ShieldCheck size={18} color="var(--orange)" /><strong>Session</strong><span>Private local session / no account required.</span></div></div></div>;
   if (id === "archive") return <div className="window-surface"><div className="surface-kicker">Archive / local library</div><h2 className="surface-title">Keep the good signals close.</h2><p className="surface-copy">Your local library is quiet by design. Pin a title from Vertex-Hub and it will appear here the next time you open the vault.</p><div className="hub-grid"><div className="mini-card"><FileStack size={18} color="var(--cyan)" /><strong>Featured queue</strong><span>Nothing pinned yet.</span></div><div className="mini-card"><FolderOpen size={18} color="var(--violet)" /><strong>Collections</strong><span>Four empty shelves waiting.</span></div></div><div className="surface-row"><button className="outline-button"><Upload size={14} /> Import local media</button></div></div>;
   if (id === "pulse") return <div className="window-surface"><div className="surface-kicker">Pulse / audio stream</div><h2 className="surface-title">System Audio</h2><p className="surface-copy">A calm, local playback surface for the background of your workspace. No remote dependencies. Start a signal from the control below.</p><div className="surface-row"><button className="primary-button"><Play size={14} /> Play signal</button><button className="outline-button"><Volume2 size={14} /> Output: workspace</button></div><div className="hub-grid"><div className="mini-card"><Music2 size={18} color="var(--cyan)" /><strong>Current channel</strong><span>Atmospheric / unlisted</span></div><div className="mini-card"><Zap size={18} color="var(--orange)" /><strong>Latency</strong><span>14 ms / local relay</span></div></div></div>;
@@ -548,6 +561,126 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, languag
     <button className="setting-row" onClick={() => setFaqOpen(faqOpen === 0 ? null : 0)}><div><strong><CircleHelp size={14} /> System FAQ</strong><small>Troubleshooting and help.</small></div><ChevronDown size={16} /></button>
     {faqOpen !== null && <div className="faq-list">{faqs.map(([question, answer], index) => <div className="faq-item" key={question}><button onClick={() => setFaqOpen(faqOpen === index ? null : index)}>{question}<ChevronDown size={15} /></button>{faqOpen === index && <div className="faq-answer">{answer}</div>}</div>)}</div>}
   </div></div>;
+}
+
+function CinefySurface() {
+  const [query, setQuery] = useState("lofi");
+  const [tracks, setTracks] = useState<CinefyTrack[]>([]);
+  const [selected, setSelected] = useState<CinefyTrack | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(30);
+  const [volume, setVolume] = useState(0.82);
+  const [favorites, setFavorites] = useState<number[]>(() => storage.read("cinefy-favorites", []));
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  async function searchTracks(term: string) {
+    const cleanTerm = term.trim();
+    if (!cleanTerm) return;
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ term: cleanTerm, media: "music", entity: "song", limit: "18" });
+      const response = await fetch(`https://itunes.apple.com/search?${params.toString()}`);
+      if (!response.ok) throw new Error("Music search unavailable");
+      const data = await response.json() as { results?: Partial<CinefyTrack>[] };
+      const nextTracks = (data.results ?? []).filter((track): track is CinefyTrack => Boolean(
+        track.trackId && track.trackName && track.artistName && track.previewUrl && track.artworkUrl100,
+      ));
+      setTracks(nextTracks);
+      if (!nextTracks.length) setError("No playable previews found for that search.");
+      if (nextTracks[0]) {
+        setSelected(nextTracks[0]);
+        setPlaying(false);
+      }
+    } catch {
+      setError("CINEFY could not reach the music relay. Try searching again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void searchTracks("lofi");
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !selected) return;
+    audio.src = selected.previewUrl;
+    audio.load();
+    setProgress(0);
+    if (playing) void audio.play().catch(() => setPlaying(false));
+  }, [selected]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = volume;
+    if (playing) void audio.play().catch(() => setPlaying(false));
+    else audio.pause();
+  }, [playing, volume]);
+
+  function selectTrack(track: CinefyTrack) {
+    setSelected(track);
+    setPlaying(true);
+  }
+
+  function stepTrack(direction: 1 | -1) {
+    if (!tracks.length) return;
+    const currentIndex = selected ? tracks.findIndex((track) => track.trackId === selected.trackId) : 0;
+    const nextIndex = (currentIndex + direction + tracks.length) % tracks.length;
+    selectTrack(tracks[nextIndex]);
+  }
+
+  function toggleFavorite(track: CinefyTrack) {
+    setFavorites((current) => {
+      const next = current.includes(track.trackId) ? current.filter((id) => id !== track.trackId) : [...current, track.trackId];
+      storage.write("cinefy-favorites", next);
+      return next;
+    });
+  }
+
+  function formatSeconds(value: number) {
+    const seconds = Math.max(0, Math.floor(value));
+    return `0:${String(seconds).padStart(2, "0")}`;
+  }
+
+  return <div className="cinefy-surface">
+    <audio ref={audioRef} onTimeUpdate={(event) => setProgress(event.currentTarget.currentTime)} onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 30)} onEnded={() => stepTrack(1)} />
+    <header className="cinefy-header">
+      <div className="cinefy-brand"><img src={asset("images/spotify-logo.jpg")} alt="Spotify logo" /><div><div className="surface-kicker">CINEFY / Vertex music relay</div><h2 className="surface-title">Music without the login wall.</h2></div></div>
+      <span className="cinefy-account">NO ACCOUNT // 30S PREVIEWS</span>
+    </header>
+    <form className="cinefy-search" onSubmit={(event) => { event.preventDefault(); void searchTracks(query); }}>
+      <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search songs, artists, or genres..." aria-label="Search music" />
+      <button className="primary-button" type="submit">{loading ? "Searching..." : "Search"}</button>
+    </form>
+    <div className="cinefy-layout">
+      <section className="cinefy-results">
+        <div className="cinefy-section-heading"><div><span className="surface-kicker">Discover</span><h3>{query || "Music"} / previews</h3></div><span>{tracks.length} signals</span></div>
+        {error && <div className="cinefy-empty">{error}</div>}
+        {!error && loading && <div className="cinefy-empty">Scanning the public music relay...</div>}
+        {!error && !loading && <div className="cinefy-track-list">{tracks.map((track, index) => <div className={`cinefy-track ${selected?.trackId === track.trackId ? "active" : ""}`} key={track.trackId}>
+          <button className="cinefy-track-main" onClick={() => selectTrack(track)}><img src={track.artworkUrl100} alt="" /><span className="cinefy-track-index">{selected?.trackId === track.trackId && playing ? "▶" : String(index + 1).padStart(2, "0")}</span><span className="cinefy-track-copy"><strong>{track.trackName}</strong><small>{track.artistName} / {track.collectionName}</small></span></button>
+          <span className="cinefy-genre">{track.primaryGenreName || "Music"}</span>
+          <button className={`cinefy-favorite ${favorites.includes(track.trackId) ? "saved" : ""}`} onClick={() => toggleFavorite(track)} aria-label={favorites.includes(track.trackId) ? "Remove favorite" : "Save favorite"}>{favorites.includes(track.trackId) ? "♥" : "♡"}</button>
+        </div>)}</div>}
+      </section>
+      <aside className="cinefy-now">
+        <div className="surface-kicker">Now selected</div>
+        {selected ? <><img className="cinefy-cover" src={selected.artworkUrl100.replace("100x100", "600x600")} alt="" /><h3>{selected.trackName}</h3><p>{selected.artistName}</p><span>{selected.collectionName}</span><a href={selected.trackViewUrl} target="_blank" rel="noreferrer">Open source listing ↗</a></> : <div className="cinefy-empty">Choose a track to begin.</div>}
+      </aside>
+    </div>
+    <footer className="cinefy-player">
+      <div className="cinefy-player-track">{selected && <><img src={selected.artworkUrl100} alt="" /><div><strong>{selected.trackName}</strong><span>{selected.artistName}</span></div></>}</div>
+      <div className="cinefy-controls"><button onClick={() => stepTrack(-1)} aria-label="Previous song"><ArrowLeft size={16} /></button><button className="cinefy-play" onClick={() => selected && setPlaying((value) => !value)} aria-label={playing ? "Pause song" : "Play song"}>{playing ? "Ⅱ" : "▶"}</button><button onClick={() => stepTrack(1)} aria-label="Next song"><ArrowRight size={16} /></button></div>
+      <div className="cinefy-progress"><span>{formatSeconds(progress)}</span><input type="range" min="0" max={duration || 30} step="0.1" value={Math.min(progress, duration || 30)} onChange={(event) => { const next = Number(event.target.value); setProgress(next); if (audioRef.current) audioRef.current.currentTime = next; }} aria-label="Song progress" /><span>{formatSeconds(duration)}</span></div>
+      <label className="cinefy-volume">VOL <input type="range" min="0" max="1" step="0.01" value={volume} onChange={(event) => setVolume(Number(event.target.value))} aria-label="Volume" /></label>
+    </footer>
+  </div>;
 }
 
 function SettingToggle({ label, help, value, onChange }: { label: string; help: string; value: boolean; onChange: (value: boolean) => void }) {
