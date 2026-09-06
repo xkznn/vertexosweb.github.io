@@ -9,23 +9,20 @@ import {
   Settings2, ShieldCheck, Sparkles, Terminal, Upload, Volume2, X, Zap,
 } from "lucide-react";
 
-type WallpaperId = "singularity" | "snake-skeleton" | "snow-fox" | "neon-city" | "orbit-drift" | "quiet-signal";
+type WallpaperId = "singularity" | "snake-skeleton" | "snow-fox";
 type LanguageCode = "en" | "es" | "ar";
 type AppId = "hub" | "archive" | "pulse" | "browser" | "settings" | "games" | "terminal" | "ciri";
 type WindowState = { id: AppId; minimized: boolean };
+type Wallpaper = { id: WallpaperId; name: string; meta: string; video: string };
 
 const base = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
 const asset = (path: string) => `${base}${path}`;
 
-const wallpapers: { id: WallpaperId; name: string; meta: string; src: string; video?: string }[] = [
-  { id: "singularity", name: "Singularity", meta: "Deep space / clean", src: asset("wallpapers/singularity.jpg"), video: asset("videos/BlackHole.mp4") },
-  { id: "snake-skeleton", name: "Snake Skeleton", meta: "Video / default", src: asset("wallpapers/singularity.jpg"), video: asset("videos/default.mp4") },
-  { id: "snow-fox", name: "Snow Fox", meta: "Video / arctic", src: asset("wallpapers/quiet-signal.jpg"), video: asset("videos/SnowFox.mp4") },
-  { id: "neon-city", name: "Neon City", meta: "Urban / midnight", src: asset("wallpapers/neon-city.jpg") },
-  { id: "orbit-drift", name: "Orbit Drift", meta: "Deep space / signal", src: asset("wallpapers/orbit-drift.jpg") },
-  { id: "quiet-signal", name: "Quiet Signal", meta: "Aurora / refuge", src: asset("wallpapers/quiet-signal.jpg") },
+const wallpapers: Wallpaper[] = [
+  { id: "singularity", name: "Singularity", meta: "Video / black hole", video: asset("videos/BlackHole.mp4") },
+  { id: "snake-skeleton", name: "Snake Skeleton", meta: "Video / default", video: asset("videos/default.mp4") },
+  { id: "snow-fox", name: "Snow Fox", meta: "Video / arctic", video: asset("videos/SnowFox.mp4") },
 ];
-type Wallpaper = (typeof wallpapers)[number];
 
 const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; pinned?: boolean }[] = [
   { id: "hub", title: "Vertex-Hub", subtitle: "media relay", icon: Sparkles, pinned: true },
@@ -305,8 +302,7 @@ function App() {
       if (phase === "desktop") setContextMenu({ x: event.clientX, y: event.clientY });
     }}>
       <div className="wallpaper-layer">
-        <img className="wallpaper-image" src={activeWallpaper.src} alt="" />
-        {activeWallpaper.video && <video className="wallpaper-video" src={activeWallpaper.video} autoPlay muted loop playsInline onMouseOver={(event) => void event.currentTarget.play()} onMouseOut={(event) => event.currentTarget.pause()} aria-hidden="true" />}
+        <video className="wallpaper-video" src={activeWallpaper.video} preload="auto" muted loop playsInline onMouseEnter={(event) => void event.currentTarget.play()} onMouseLeave={(event) => event.currentTarget.pause()} aria-label={`${activeWallpaper.name} wallpaper`} />
       </div>
 
       <section className={`boot-screen ${phase !== "boot" ? "hidden" : ""}`} aria-label="Vertex boot sequence">
@@ -325,8 +321,7 @@ function App() {
       </section>
 
       <section className={`lock-screen ${phase === "lock" ? "active" : ""}`} onClick={unlock} aria-label="Vertex lock screen">
-        <img className="lock-wallpaper" src={activeLockWallpaper.src} alt="" />
-         {activeLockWallpaper.video && <video className="lock-wallpaper-video" src={activeLockWallpaper.video} autoPlay muted loop playsInline onMouseOver={(event) => void event.currentTarget.play()} onMouseOut={(event) => event.currentTarget.pause()} aria-hidden="true" />}
+         <video className="lock-wallpaper-video" src={activeLockWallpaper.video} preload="auto" muted loop playsInline onMouseEnter={(event) => void event.currentTarget.play()} onMouseLeave={(event) => event.currentTarget.pause()} aria-label={`${activeLockWallpaper.name} lock wallpaper`} />
         <div className="lock-ui">
            <div className="lock-day">{now.toLocaleDateString(localeFor(language), { weekday: "long" }).toUpperCase()}</div>
            <div className="lock-date">{formatDate(now, language)}</div>
@@ -427,7 +422,7 @@ function App() {
 
         <div className={`media-player ${mediaHidden ? "hidden" : ""}`}>
           <div className="media-top"><span className="media-label">Now playing</span><div className="media-actions"><button onClick={() => setMediaHidden(true)} aria-label="Minimize player"><Minus size={13} /></button><button onClick={() => { setMediaHidden(true); setMediaPlaying(false); }} aria-label="Close player"><X size={13} /></button></div></div>
-          <div className="media-main"><img className="album-art" src={activeWallpaper.src} alt="" /><div className="track"><strong>System Audio</strong><span>{mediaPlaying ? "Vertex Pulse / live" : "Ready to play"}</span></div></div>
+          <div className="media-main"><video className="album-art" src={activeWallpaper.video} muted loop playsInline preload="metadata" /><div className="track"><strong>System Audio</strong><span>{mediaPlaying ? "Vertex Pulse / live" : "Ready to play"}</span></div></div>
           <div className="progress"><span style={{ width: mediaPlaying ? "56%" : "22%" }} /></div>
           <div className="media-controls"><button onClick={() => addToast("Audio", "Previous signal unavailable in local mode.")} aria-label="Previous track"><ArrowLeft size={16} /></button><button onClick={() => setMediaPlaying((playing) => !playing)} aria-label="Play or pause"><Play size={17} fill={mediaPlaying ? "currentColor" : "none"} /></button><button onClick={() => addToast("Audio", "Next signal unavailable in local mode.")} aria-label="Next track"><ArrowRight size={16} /></button></div>
         </div>
@@ -521,7 +516,7 @@ function SettingToggle({ label, help, value, onChange }: { label: string; help: 
 }
 
 function WallpaperModal({ open, target, setTarget, wallpapers, current, onChoose, loop, setLoop, onClose }: { open: boolean; target: "both" | "home" | "lock"; setTarget: (target: "both" | "home" | "lock") => void; wallpapers: Wallpaper[]; current: WallpaperId; onChoose: (id: WallpaperId) => void; loop: boolean; setLoop: (value: boolean) => void; onClose: () => void }) {
-  return <div className={`wallpaper-modal ${open ? "open" : ""}`} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="modal-card"><header className="modal-header"><h2>WALLPAPER PROTOCOLS</h2><button className="icon-close" onClick={onClose} aria-label="Close wallpaper settings" data-testid="button-close-wallpapers"><X size={19} /></button></header><div className="modal-toolbar"><div className="segmented">{(["both", "home", "lock"] as const).map((option) => <button key={option} className={target === option ? "active" : ""} onClick={() => setTarget(option)}>{option === "home" ? "Homescreen" : option === "lock" ? "Lockscreen" : "Both"}</button>)}</div><label className="toggle-text"><input type="checkbox" checked={loop} onChange={(event) => setLoop(event.target.checked)} /> Loop wallpaper</label></div><div className="wallpaper-grid">{wallpapers.map((item) => <button className={`wallpaper-option ${current === item.id ? "active" : ""}`} key={item.id} onClick={() => onChoose(item.id)} data-testid={`button-wallpaper-${item.id}`}><img src={item.src} alt={item.name} /><span>{item.name} / {item.meta}</span></button>)}</div></div></div>;
+  return <div className={`wallpaper-modal ${open ? "open" : ""}`} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="modal-card"><header className="modal-header"><h2>WALLPAPER PROTOCOLS</h2><button className="icon-close" onClick={onClose} aria-label="Close wallpaper settings" data-testid="button-close-wallpapers"><X size={19} /></button></header><div className="modal-toolbar"><div className="segmented">{(["both", "home", "lock"] as const).map((option) => <button key={option} className={target === option ? "active" : ""} onClick={() => setTarget(option)}>{option === "home" ? "Homescreen" : option === "lock" ? "Lockscreen" : "Both"}</button>)}</div><label className="toggle-text"><input type="checkbox" checked={loop} onChange={(event) => setLoop(event.target.checked)} /> Loop wallpaper</label></div><div className="wallpaper-grid">{wallpapers.map((item) => <button className={`wallpaper-option ${current === item.id ? "active" : ""}`} key={item.id} onClick={() => onChoose(item.id)} data-testid={`button-wallpaper-${item.id}`}><video src={item.video} muted loop playsInline preload="metadata" onMouseEnter={(event) => void event.currentTarget.play()} onMouseLeave={(event) => event.currentTarget.pause()} aria-label={`${item.name} preview`} /><span>{item.name} / {item.meta}</span></button>)}</div></div></div>;
 }
 
 function InfoModal({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
