@@ -10,14 +10,15 @@ import {
 } from "lucide-react";
 
 type WallpaperId = "singularity" | "neon-city" | "orbit-drift" | "quiet-signal";
+type LanguageCode = "en" | "es" | "ar";
 type AppId = "hub" | "archive" | "pulse" | "browser" | "settings" | "games" | "terminal" | "ciri";
 type WindowState = { id: AppId; minimized: boolean };
 
 const base = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
 const asset = (path: string) => `${base}${path}`;
 
-const wallpapers: { id: WallpaperId; name: string; meta: string; src: string }[] = [
-  { id: "singularity", name: "Singularity", meta: "Deep space / clean", src: asset("wallpapers/singularity.jpg") },
+const wallpapers: { id: WallpaperId; name: string; meta: string; src: string; video?: string }[] = [
+  { id: "singularity", name: "Singularity", meta: "Deep space / clean", src: asset("wallpapers/singularity.jpg"), video: asset("videos/BlackHole.mp4") },
   { id: "neon-city", name: "Neon City", meta: "Urban / midnight", src: asset("wallpapers/neon-city.jpg") },
   { id: "orbit-drift", name: "Orbit Drift", meta: "Deep space / signal", src: asset("wallpapers/orbit-drift.jpg") },
   { id: "quiet-signal", name: "Quiet Signal", meta: "Aurora / refuge", src: asset("wallpapers/quiet-signal.jpg") },
@@ -53,9 +54,73 @@ function formatClock(date: Date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-function formatDate(date: Date) {
-  return date.toLocaleDateString([], { day: "2-digit", month: "long", year: "numeric" }).toUpperCase();
+function localeFor(language: LanguageCode) {
+  return language === "es" ? "es-ES" : language === "ar" ? "ar" : "en-US";
 }
+
+function formatDate(date: Date, language: LanguageCode) {
+  return date.toLocaleDateString(localeFor(language), { day: "2-digit", month: "long", year: "numeric" }).toUpperCase();
+}
+
+const translations: Record<LanguageCode, {
+  languageName: string;
+  bootSub: string;
+  enter: string;
+  initializing: string;
+  hint: string;
+  establishing: string;
+  lockHelp: string;
+  runtime: string;
+  jumpBack: string;
+  quickPlay: string;
+  systemStatus: string;
+  gameDeck: string;
+  libraryReady: string;
+  playing: string;
+  notPlaying: string;
+  systemAudio: string;
+  vertexPulse: string;
+  updateLog: string;
+  latestPatches: string;
+  searchVertex: string;
+  pinned: string;
+  administrator: string;
+  searchApps: string;
+}> = {
+  en: {
+    languageName: "English", bootSub: "Vertex-Hub software // presentation build 3.0", enter: "Enter Vertex",
+    initializing: "Initializing", hint: "Press Enter twice to skip sequence", establishing: "Establishing visual relay...",
+    lockHelp: "Click or tap anywhere to unlock workspace", runtime: "Vertex runtime / online", jumpBack: "Jump back in",
+    quickPlay: "Quick play", systemStatus: "System status", gameDeck: "Game Deck", libraryReady: "Library ready",
+    playing: "Signal / playing", notPlaying: "Not Playing", systemAudio: "System Audio", vertexPulse: "Vertex Pulse",
+    updateLog: "Update Log", latestPatches: "View latest patches", searchVertex: "Search Vertex...", pinned: "PINNED",
+    administrator: "Administrator", searchApps: "Search apps...",
+  },
+  es: {
+    languageName: "Español", bootSub: "Software Vertex-Hub // compilación de presentación 3.0", enter: "Entrar a Vertex",
+    initializing: "Iniciando", hint: "Pulsa Enter dos veces para omitir la secuencia", establishing: "Estableciendo enlace visual...",
+    lockHelp: "Haz clic o toca cualquier lugar para desbloquear el espacio", runtime: "Sistema Vertex / en línea", jumpBack: "Volver a entrar",
+    quickPlay: "Reproducción rápida", systemStatus: "Estado del sistema", gameDeck: "Mazo de juegos", libraryReady: "Biblioteca lista",
+    playing: "Señal / reproduciendo", notPlaying: "No reproduciendo", systemAudio: "Audio del sistema", vertexPulse: "Vertex Pulse",
+    updateLog: "Registro de actualizaciones", latestPatches: "Ver últimos cambios", searchVertex: "Buscar en Vertex...", pinned: "FIJADOS",
+    administrator: "Administrador", searchApps: "Buscar aplicaciones...",
+  },
+  ar: {
+    languageName: "العربية", bootSub: "برامج Vertex-Hub // إصدار العرض 3.0", enter: "الدخول إلى Vertex",
+    initializing: "جارٍ البدء", hint: "اضغط Enter مرتين لتخطي التسلسل", establishing: "جارٍ إنشاء الاتصال المرئي...",
+    lockHelp: "انقر أو المس أي مكان لفتح مساحة العمل", runtime: "نظام Vertex / متصل", jumpBack: "العودة إلى المساحة",
+    quickPlay: "تشغيل سريع", systemStatus: "حالة النظام", gameDeck: "مكتبة الألعاب", libraryReady: "المكتبة جاهزة",
+    playing: "الإشارة / قيد التشغيل", notPlaying: "لا يوجد تشغيل", systemAudio: "صوت النظام", vertexPulse: "Vertex Pulse",
+    updateLog: "سجل التحديثات", latestPatches: "عرض آخر التحديثات", searchVertex: "البحث في Vertex...", pinned: "مثبت",
+    administrator: "المسؤول", searchApps: "البحث في التطبيقات...",
+  },
+};
+
+const languageOptions: { code: LanguageCode; label: string; native: string }[] = [
+  { code: "en", label: "English", native: "English" },
+  { code: "es", label: "Spanish", native: "Español" },
+  { code: "ar", label: "Arabic", native: "العربية" },
+];
 
 function BrandMark() {
   return <span className="brand-mark"><span className="brand-glyph"><span /></span><span>Vertex Systems</span></span>;
@@ -71,6 +136,8 @@ function App() {
   const [booting, setBooting] = useState(false);
   const [mobileWarning, setMobileWarning] = useState(() => window.innerWidth < 760);
   const [now, setNow] = useState(() => new Date());
+  const [language, setLanguage] = useState<LanguageCode>(() => storage.read("vertex-language", "en"));
+  const [languageOpen, setLanguageOpen] = useState(() => !storage.read("vertex-language-set", false));
   const [wallpaper, setWallpaper] = useState<WallpaperId>(() => storage.read("vertex-wallpaper-v2", "singularity"));
   const [lockWallpaper, setLockWallpaper] = useState<WallpaperId>(() => storage.read("vertex-lock-wallpaper-v2", "singularity"));
   const [wallpaperOpen, setWallpaperOpen] = useState(false);
@@ -98,6 +165,7 @@ function App() {
 
   const activeWallpaper = wallpapers.find((item) => item.id === wallpaper) ?? wallpapers[0];
   const activeLockWallpaper = wallpapers.find((item) => item.id === lockWallpaper) ?? wallpapers[1];
+  const ui = translations[language];
   const filteredApps = useMemo(() => apps.filter((app) => app.title.toLowerCase().includes(drawerQuery.toLowerCase())), [drawerQuery]);
   const pinnedApps = useMemo(() => apps.filter((app) => app.pinned && app.title.toLowerCase().includes(startQuery.toLowerCase())), [startQuery]);
 
@@ -105,6 +173,11 @@ function App() {
     const interval = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
+  }, [language]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -140,6 +213,13 @@ function App() {
     const id = Date.now();
     setToasts((items) => [...items, { id, title, copy }]);
     window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 5000);
+  }
+
+  function chooseLanguage(next: LanguageCode) {
+    setLanguage(next);
+    storage.write("vertex-language", next);
+    storage.write("vertex-language-set", true);
+    setLanguageOpen(false);
   }
 
   function beginBoot() {
@@ -224,18 +304,19 @@ function App() {
     }}>
       <div className="wallpaper-layer">
         <img className="wallpaper-image" src={activeWallpaper.src} alt="" />
+        {activeWallpaper.video && <video className="wallpaper-video" src={activeWallpaper.video} autoPlay muted loop playsInline onMouseOver={(event) => void event.currentTarget.play()} onMouseOut={(event) => event.currentTarget.pause()} aria-hidden="true" />}
       </div>
 
       <section className={`boot-screen ${phase !== "boot" ? "hidden" : ""}`} aria-label="Vertex boot sequence">
         <div className="boot-core">
           <BrandMark />
           <h1 className="boot-title">VERTEX-OS</h1>
-          <p className="boot-sub">Vertex-Hub software // presentation build 3.0</p>
+           <p className="boot-sub">{ui.bootSub}</p>
           <div className="boot-actions">
             <button className="primary-button" data-testid="button-enter-vertex" onClick={(event) => { event.stopPropagation(); beginBoot(); }}>
-              {booting ? "Initializing" : "Enter Vertex"}
+               {booting ? ui.initializing : ui.enter}
             </button>
-            <span className="boot-hint">{booting ? "Establishing visual relay..." : "Press Enter twice to skip sequence"}</span>
+             <span className="boot-hint">{booting ? ui.establishing : ui.hint}</span>
           </div>
           {booting && <div className="boot-progress"><span /></div>}
         </div>
@@ -243,42 +324,43 @@ function App() {
 
       <section className={`lock-screen ${phase === "lock" ? "active" : ""}`} onClick={unlock} aria-label="Vertex lock screen">
         <img className="lock-wallpaper" src={activeLockWallpaper.src} alt="" />
+         {activeLockWallpaper.video && <video className="lock-wallpaper-video" src={activeLockWallpaper.video} autoPlay muted loop playsInline onMouseOver={(event) => void event.currentTarget.play()} onMouseOut={(event) => event.currentTarget.pause()} aria-hidden="true" />}
         <div className="lock-ui">
-          <div className="lock-day">{now.toLocaleDateString([], { weekday: "long" }).toUpperCase()}</div>
-          <div className="lock-date">{formatDate(now)}</div>
+           <div className="lock-day">{now.toLocaleDateString(localeFor(language), { weekday: "long" }).toUpperCase()}</div>
+           <div className="lock-date">{formatDate(now, language)}</div>
           <div className="lock-time">— {formatClock(now)} —</div>
         </div>
          <div className="lock-fps">60 FPS</div>
-        <div className="lock-help">Click or tap anywhere to unlock workspace</div>
+         <div className="lock-help">{ui.lockHelp}</div>
       </section>
 
       <section className={`desktop-shell ${phase === "desktop" ? "active" : ""} ${largeIcons ? "large-icons" : ""}`}>
         <header className="hud">
-          <div className="hud-topline">Vertex runtime / online</div>
-          <div className="hud-day">{now.toLocaleDateString([], { weekday: "long" }).toUpperCase()}</div>
+           <div className="hud-topline">{ui.runtime}</div>
+           <div className="hud-day">{now.toLocaleDateString(localeFor(language), { weekday: "long" }).toUpperCase()}</div>
           <div className="hud-meta"><strong>{formatClock(now)}</strong> &nbsp; // &nbsp; local session &nbsp; // &nbsp; <span>60 FPS</span></div>
         </header>
 
         <aside className="sidebar" aria-label="Quick access">
           <div>
-            <div className="side-label">Jump back in</div>
+             <div className="side-label">{ui.jumpBack}</div>
             <button className="side-card" onClick={() => toggleApp("games")} data-testid="button-jump-back">
-              <div className="side-art"><Gamepad2 size={22} /></div>
-              <div className="side-info"><strong>Game Deck</strong><span>Library ready</span></div><ChevronRight className="side-chevron" size={15} />
+               <div className="side-art"><Gamepad2 size={22} /></div>
+               <div className="side-info"><strong>{ui.gameDeck}</strong><span>{ui.libraryReady}</span></div><ChevronRight className="side-chevron" size={15} />
             </button>
           </div>
           <div>
-            <div className="side-label">Quick play</div>
+             <div className="side-label">{ui.quickPlay}</div>
             <button className="side-card" onClick={() => { toggleApp("pulse"); setMediaPlaying(true); }} data-testid="button-quick-play">
-              <div className="side-art"><Play size={19} /></div>
-              <div className="side-info"><strong>{mediaPlaying ? "Signal / playing" : "System Audio"}</strong><span>Vertex Pulse</span></div><ChevronRight className="side-chevron" size={15} />
+               <div className="side-art"><Play size={19} /></div>
+               <div className="side-info"><strong>{mediaPlaying ? ui.playing : ui.notPlaying}</strong><span>{mediaPlaying ? ui.vertexPulse : ui.systemAudio}</span></div><ChevronRight className="side-chevron" size={15} />
             </button>
           </div>
           <div>
-            <div className="side-label">System status</div>
+             <div className="side-label">{ui.systemStatus}</div>
             <button className="side-card" onClick={() => setUpdateOpen(true)} data-testid="button-update-log">
-              <div className="side-art"><Radio size={20} /></div>
-              <div className="side-info"><strong>Update Log</strong><span>View latest patches</span></div><ChevronRight className="side-chevron" size={15} />
+               <div className="side-art"><Radio size={20} /></div>
+               <div className="side-info"><strong>{ui.updateLog}</strong><span>{ui.latestPatches}</span></div><ChevronRight className="side-chevron" size={15} />
             </button>
           </div>
         </aside>
@@ -308,8 +390,8 @@ function App() {
         </nav>
 
         <div className={`overlay-panel start-panel ${startOpen ? "open" : ""}`} onClick={(event) => event.stopPropagation()} aria-label="Start menu">
-          <div className="search-field"><Menu size={16} /><input value={startQuery} onChange={(event) => setStartQuery(event.target.value)} placeholder="Search Vertex..." aria-label="Search start menu" data-testid="input-start-search" /></div>
-          <div className="panel-heading"><h3>PINNED</h3><span>Administrator</span></div>
+           <div className="search-field"><Menu size={16} /><input value={startQuery} onChange={(event) => setStartQuery(event.target.value)} placeholder={ui.searchVertex} aria-label="Search start menu" data-testid="input-start-search" /></div>
+           <div className="panel-heading"><h3>{ui.pinned}</h3><span>{ui.administrator}</span></div>
           <div className="pinned-grid">
             {pinnedApps.map((app) => <button key={app.id} className="pinned-item" onClick={() => toggleApp(app.id)} data-testid={`button-pinned-${app.id}`}><AppIcon app={app} size={22} /><span>{app.title}</span></button>)}
           </div>
@@ -318,7 +400,7 @@ function App() {
 
         <div className={`drawer ${drawerOpen ? "open" : ""}`} onClick={(event) => { if (event.target === event.currentTarget) setDrawerOpen(false); }} aria-label="All applications">
           <button className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Close app drawer" data-testid="button-close-drawer"><X size={22} /></button>
-          <div className="search-field drawer-search"><Grid2X2 size={16} /><input value={drawerQuery} onChange={(event) => setDrawerQuery(event.target.value)} placeholder="Search apps..." aria-label="Search apps" data-testid="input-drawer-search" /></div>
+           <div className="search-field drawer-search"><Grid2X2 size={16} /><input value={drawerQuery} onChange={(event) => setDrawerQuery(event.target.value)} placeholder={ui.searchApps} aria-label="Search apps" data-testid="input-drawer-search" /></div>
           <div className="drawer-grid">{filteredApps.map((app) => <button key={app.id} className="drawer-item" onClick={() => toggleApp(app.id)} data-testid={`button-drawer-${app.id}`}><span className="icon-tile"><AppIcon app={app} size={25} /></span><span>{app.title}</span></button>)}</div>
         </div>
 
@@ -356,6 +438,20 @@ function App() {
           <form className="ciri-form" onSubmit={(event) => { event.preventDefault(); sendChat(); }}><textarea value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Message Ciri..." rows={1} aria-label="Message Ciri" data-testid="input-ciri-chat" /><button className="send-button" type="submit" aria-label="Send message" data-testid="button-send-ciri"><Send size={16} /></button></form>
         </aside>
       </section>
+
+       {languageOpen && <div className="language-gate" role="dialog" aria-modal="true" aria-labelledby="language-title" onClick={(event) => event.stopPropagation()}>
+         <div className="language-card">
+           <BrandMark />
+           <div className="language-kicker">FIRST BOOT / LANGUAGE</div>
+           <h2 id="language-title">Choose your language</h2>
+           <p>Select the language for your Vertex-OS session.</p>
+           <div className="language-options">
+             {languageOptions.map((option) => <button key={option.code} className="language-option" onClick={() => chooseLanguage(option.code)} data-testid={`button-language-${option.code}`}>
+               <span>{option.native}</span><small>{option.label}</small><ChevronRight size={16} />
+             </button>)}
+           </div>
+         </div>
+       </div>}
 
       {mobileWarning && <div className="mobile-warning" onDoubleClick={() => setMobileWarning(false)}><div className="mobile-warning-card"><div className="mobile-warning-kicker">Display notice / mobile mode</div><h2>Desktop protocol detected</h2><p>Vertex-OS is tuned for a larger display. Continue to explore with a touch-friendly layout, or double tap anywhere to dismiss this notice.</p><button className="primary-button" onClick={() => setMobileWarning(false)} data-testid="button-continue-mobile">Continue to Vertex</button></div></div>}
       <div className="toast-stack">{toasts.map((toast) => <button className="toast" key={toast.id} onClick={() => setToasts((items) => items.filter((item) => item.id !== toast.id))}><strong>{toast.title}</strong><span>{toast.copy}</span></button>)}</div>
