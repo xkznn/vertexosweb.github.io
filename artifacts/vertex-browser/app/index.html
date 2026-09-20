@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'" />
+  <title>Vertex Browser</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="tabstrip">
+    <div id="tabs" class="drag"></div>
+    <button id="newtab" title="New tab (Ctrl+T)"></button>
+    <div class="drag spacer"></div>
+    <button id="win-min" class="wc" title="Minimize"></button>
+    <button id="win-max" class="wc" title="Maximize"></button>
+    <button id="win-close" class="wc" title="Close"></button>
+  </div>
+
+  <div id="toolbar">
+    <div class="drag gutter"></div>
+    <button id="back" class="navbtn" title="Back (Alt+Left)"></button>
+    <button id="fwd" class="navbtn" title="Forward (Alt+Right)"></button>
+    <button id="reload" class="navbtn" title="Reload (F5)"></button>
+    <button id="home" class="navbtn" title="Home"></button>
+
+    <div id="searchwrap">
+      <span id="scheme" class="lock"></span>
+      <input id="url" type="text" spellcheck="false" placeholder="Search or enter address" autocomplete="off" />
+      <div id="suggest" hidden></div>
+    </div>
+
+    <button id="shield" class="action" title="Ad blocker"></button>
+    <button id="settings" class="action" title="Settings"></button>
+  </div>
+
+  <div id="progress" hidden></div>
+
+  <div id="settings-panel" hidden>
+    <div class="panel-title">Settings</div>
+
+    <div class="row">
+      <div class="row-text">
+        <div class="row-label">Ad blocker</div>
+        <div class="row-help">Blocks ads &amp; trackers (EasyList + EasyPrivacy). <span id="adcount"></span></div>
+      </div>
+      <label class="switch"><input type="checkbox" id="ad-toggle" /><span class="slider"></span></label>
+    </div>
+
+    <div class="row">
+      <div class="row-text">
+        <div class="row-label">Search engine</div>
+        <div class="row-help">Used when you type a query in the address bar.</div>
+      </div>
+      <select id="engine">
+        <option value="google">Google</option>
+        <option value="duck">DuckDuckGo</option>
+        <option value="bing">Bing</option>
+        <option value="startpage">Startpage</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <div class="row-text">
+        <div class="row-label">Home page</div>
+        <div class="row-help">Page when you click Home or open a first tab.</div>
+      </div>
+      <select id="homepage">
+        <option value="vertex">Vertex Start page</option>
+        <option value="current">Current tab</option>
+        <option value="custom">Custom URL</option>
+      </select>
+    </div>
+
+    <div class="row" id="custom-home-row" hidden>
+      <div class="row-text">
+        <div class="row-label">Custom URL</div>
+      </div>
+      <input id="custom-home" type="text" placeholder="https://example.com" />
+    </div>
+
+    <div class="row">
+      <div class="row-text">
+        <div class="row-label">Theme</div>
+      </div>
+      <select id="theme">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <div class="row-text">
+        <div class="row-label">Clear browsing data</div>
+        <div class="row-help">Cache, cookies, storage &amp; history.</div>
+      </div>
+      <button id="clear-data" class="btn danger">Clear</button>
+    </div>
+
+    <div class="about">Vertex Browser <span id="app-version"></span> · Chromium <span id="chrome-version"></span></div>
+  </div>
+
+  <div id="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

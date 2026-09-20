@@ -1,0 +1,47 @@
+{
+  "name": "vertex-browser",
+  "version": "1.0.0",
+  "description": "Vertex Browser - a fast, private, ad-free Chromium browser.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron . --smoke-test",
+    "icon": "node scripts/make-icon.js",
+    "dist": "electron-builder --win",
+    "pack": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.vertex.browser",
+    "productName": "Vertex Browser",
+    "copyright": "Vertex",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*",
+      "assets/icon.png"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "Vertex-Browser-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Vertex Browser"
+    }
+  },
+  "devDependencies": {
+    "@cliqz/adblocker-electron": "^1.28.0",
+    "electron": "^36.0.0",
+    "electron-builder": "^26.0.0"
+  }
+}

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: https:; connect-src 'self'" />
+  <title>New Tab - Vertex</title>
+  <link rel="stylesheet" href="startpage.css" />
+</head>
+<body>
+  <div id="bg-glow"></div>
+
+  <header class="topbar drag">
+    <div class="brand">
+      <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5l6 14 6-14"/></svg></div>
+      <span>Vertex <b>Browser</b></span>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="logo"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 14l14 36 14-36"/></svg></div>
+      <h1>Vertex</h1>
+      <p class="tagline">Fast. Private. Ad-free.</p>
+
+      <div id="box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="q" type="text" placeholder="Search the web or type an address" spellcheck="false" autocomplete="off" />
+        <div id="suggest" hidden></div>
+      </div>
+    </div>
+
+    <div id="content">
+      <h2 class="expl">Explore</h2>
+      <div id="cards" class="cards"></div>
+
+      <h2 class="expl">Speed dial</h2>
+      <div id="dial" class="dial"></div>
+
+      <h2 class="expl" id="rec-title" hidden>Recently visited</h2>
+      <ul id="recent"></ul>
+    </div>
+  </main>
+
+  <footer>Vertex Browser · your data never leaves the server you choose</footer>
+
+  <script src="startpage.js"></script>
+</body>
+</html>

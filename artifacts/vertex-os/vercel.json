@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "buildCommand": "PORT=5001 BASE_PATH=/ npm run build",
+  "builds": [
+    { "src": "dist/public/**", "use": "@vercel/static" },
+    { "src": "api/chat.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/chat", "dest": "/api/chat.js", "methods": ["GET", "POST"] },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Content-Security-Policy", "value": "frame-ancestors 'self'" }
+      ]
+    }
+  ]
+}
