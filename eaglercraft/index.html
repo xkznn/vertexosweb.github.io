@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>EaglercraftX 1.8.8</title>
+		<link rel="shortcut icon" href="favicon.png" type="image/png" />
+		<script type="text/javascript" src="classes.js"></script>
+		<script type="text/javascript">
+			"use strict";
+			window.addEventListener("load", () => {
+				window.eaglercraftXOpts = {
+					demoMode: false,
+					container: "game_frame",
+					assetsURI: "assets.epk",
+					localesURI: "lang/",
+					worldsDB: "vertex-eaglercraft-worlds",
+					resourcePacksDB: "vertex-eaglercraft-rp",
+					servers: [
+						{ serverName: "ArchMC", serverAddress: "wss://mc.arch.lol/", hideAddress: false },
+						{ serverName: "Eaglercraft Server", serverAddress: "wss://eaglercraft.online/", hideAddress: false }
+					],
+					relays: [
+						{ addr: "wss://relay.deev.is/", comment: "lax1dude relay #1", primary: true }
+					]
+				};
+				var q = window.location.search;
+				if (typeof q === "string" && q.startsWith("?")) {
+					q = new URLSearchParams(q);
+					var server = q.get("server");
+					if (server) window.eaglercraftXOpts.joinServer = server;
+				}
+				main();
+			});
+		</script>
+	</head>
+	<body style="margin:0;width:100vw;height:100vh;overflow:hidden;" id="game_frame"></body>
+</html>
