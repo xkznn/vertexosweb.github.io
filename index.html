@@ -3,6 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <script>
+      try {
+        var __vs = JSON.parse(localStorage.getItem("vertex-settings") || "{}");
+        var __root = document.documentElement;
+        __root.dataset.theme = __vs.colorMode === "light" ? "light" : "dark";
+        __root.dataset.style = __vs.systemStyle === "macos" ? "macos" : "";
+      } catch (e) {}
+    </script>
     <title>Vertex-OS</title>
     <meta name="description" content="Vertex-OS — built on Replit. Update this description to reflect the app." />
     <meta name="robots" content="index, follow" />
@@ -16,8 +24,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="/vertexosweb.github.io/assets/index-J7Sq3bNC.js"></script>
-    <link rel="stylesheet" crossorigin href="/vertexosweb.github.io/assets/index-D7QCeTZi.css">
+    <script type="module" crossorigin src="/vertexosweb.github.io/assets/index-G10cv9bR.js"></script>
+    <link rel="stylesheet" crossorigin href="/vertexosweb.github.io/assets/index-BYtlu-XQ.css">
   </head>
   <body>
     <div id="root"></div>
