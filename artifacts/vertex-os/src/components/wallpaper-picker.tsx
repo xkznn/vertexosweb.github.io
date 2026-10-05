@@ -15,7 +15,6 @@ export type PickerWallpaper = {
 
 const CUSTOM_DB = "vertex-os-cache";
 const CUSTOM_STORE = "custom-wallpapers";
-const CUSTOM_RES_LS = "vertex-custom-res-v2";
 
 let customDbPromise: Promise<IDBDatabase> | null = null;
 
@@ -81,63 +80,64 @@ function isDurableSrc(url: string | undefined): url is string {
   return typeof url === "string" && (url.startsWith("data:") || /^https?:\/\//i.test(url));
 }
 
-type ResolutionKey = "360" | "480" | "720" | "1080";
+// Every custom image is baked to an actual 1920x1080 (1080P) canvas — upscaled when smaller, downscaled when larger.
+const CUSTOM_IMAGE_W = 1920;
+const CUSTOM_IMAGE_H = 1080;
 
-// Max edge (px) per quality option for custom wallpapers — 1080P is the ceiling.
-const RES_OPTIONS: { key: ResolutionKey; label: string; edge: number }[] = [
-  { key: "360", label: "360P", edge: 360 },
-  { key: "480", label: "480P", edge: 480 },
-  { key: "720", label: "720P", edge: 720 },
-  { key: "1080", label: "1080P", edge: 1080 },
-];
-
-function usedResEdge(): number {
-  try { const v = localStorage.getItem(CUSTOM_RES_LS); if (v) { const n = Number(v); if ([
-    360, 480, 720, 1080,
-  ].includes(n)) return n; } } catch { /* ignore */ }
-  return 1080;
-}
-function setResLocal(r: "360" | "480" | "720" | "1080") {
-  try { localStorage.setItem(CUSTOM_RES_LS, String(Number(r))); } catch { /* ignore */ }
-}
-
-async function fileToDataUrl(file: Blob, targetEdge = usedResEdge()): Promise<string> {
-  if (file.size > 2_500_000) {
-    try {
-      const url = URL.createObjectURL(file);
-      try {
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const el = document.createElement("img");
-          el.onload = () => resolve(el);
-          el.onerror = () => reject(new Error("decode"));
-          el.src = url;
-        });
-        const MAX = 1600;
-        const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
-        if (scale < 1) {
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-          canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            const keepAlpha = /png|gif|webp|svg/i.test(file.type);
-            return canvas.toDataURL(keepAlpha ? "image/png" : "image/jpeg", 0.85);
-          }
-        }
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-    } catch {
-      /* fall through to raw read */
-    }
-  }
+function readRawAsDataUrl(file: Blob): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const fr = new FileReader();
     fr.onload = () => resolve(typeof fr.result === "string" ? fr.result : "");
     fr.onerror = () => reject(fr.error);
     fr.readAsDataURL(file);
   });
+}
+
+function decodeImageStrict(src: string): Promise<HTMLImageElement> {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = document.createElement("img");
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error("decode"));
+    el.src = src;
+  });
+}
+
+async function fileToDataUrl(file: Blob): Promise<string> {
+  if (/image\/svg/i.test(file.type)) return readRawAsDataUrl(file);
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await decodeImageStrict(url);
+    const canvas = document.createElement("canvas");
+    canvas.width = CUSTOM_IMAGE_W;
+    canvas.height = CUSTOM_IMAGE_H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return readRawAsDataUrl(file);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    const scale = Math.max(CUSTOM_IMAGE_W / img.naturalWidth, CUSTOM_IMAGE_H / img.naturalHeight);
+    const dw = img.naturalWidth * scale;
+    const dh = img.naturalHeight * scale;
+    ctx.drawImage(img, (CUSTOM_IMAGE_W - dw) / 2, (CUSTOM_IMAGE_H - dh) / 2, dw, dh);
+    const keepAlpha = /png|gif|webp/i.test(file.type);
+    return canvas.toDataURL(keepAlpha ? "image/png" : "image/jpeg", 0.92);
+  } catch {
+    return readRawAsDataUrl(file);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function urlToDataUrl(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, { mode: "cors" });
+    if (!res.ok) return url;
+    const blob = await res.blob();
+    if (blob.size <= 0) return url;
+    const data = await fileToDataUrl(blob);
+    return data && data.startsWith("data:") ? data : url;
+  } catch {
+    return url;
+  }
 }
 
 async function toDurable(wp: PickerWallpaper & { blob?: Blob }): Promise<PickerWallpaper | null> {
@@ -372,7 +372,6 @@ export function WallpaperPicker({ entries, appliedId, onApply, onClose, onCustom
   const [preview, setPreview] = useState<PickerWallpaper | null>(null);
   const [urlMode, setUrlMode] = useState(false);
   const [urlValue, setUrlValue] = useState("");
-  const [customRes, setCustomRes] = useState<"360" | "480" | "720" | "1080">("1080");
 
   const stageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -390,21 +389,26 @@ export function WallpaperPicker({ entries, appliedId, onApply, onClose, onCustom
   callbacksRef.current = { onApply, onClose, onCustomAdd, onCustomRemove };
   previewRef.current = preview;
 
-  const pickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const pickFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
     for (const file of files) {
       const isVideo = file.type.startsWith("video/");
       if (!isVideo && !file.type.startsWith("image/")) continue;
-      const url = URL.createObjectURL(file);
       const base = file.name.replace(/\.[^.]+$/, "").trim() || "Custom";
-      callbacksRef.current.onCustomAdd({
-        id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        name: base,
-        blob: file,
-        video: isVideo ? url : undefined,
-        image: isVideo ? undefined : url,
-      });
+      const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      if (isVideo) {
+        const url = URL.createObjectURL(file);
+        callbacksRef.current.onCustomAdd({ id, name: base, blob: file, video: url });
+        continue;
+      }
+      try {
+        const image = await fileToDataUrl(file);
+        callbacksRef.current.onCustomAdd({ id, name: base, image });
+      } catch {
+        const url = URL.createObjectURL(file);
+        callbacksRef.current.onCustomAdd({ id, name: base, image: url });
+      }
     }
     e.target.value = "";
   };
@@ -417,12 +421,14 @@ export function WallpaperPicker({ entries, appliedId, onApply, onClose, onCustom
       const ext = u.pathname.split(".").pop()?.toLowerCase() ?? "";
       const isImage = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(ext);
       const name = decodeURIComponent(u.pathname.split("/").pop() ?? "").replace(/\.[^.]+$/, "").trim() || "Custom URL";
-      callbacksRef.current.onCustomAdd({
-        id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        name,
-        video: isImage ? undefined : raw,
-        image: isImage ? raw : undefined,
-      });
+      const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      if (isImage) {
+        void urlToDataUrl(raw).then((img) =>
+          callbacksRef.current.onCustomAdd({ id, name, image: img }),
+        );
+      } else {
+        callbacksRef.current.onCustomAdd({ id, name, video: raw });
+      }
       setUrlValue("");
       setUrlMode(false);
     } catch {
@@ -840,18 +846,9 @@ export function WallpaperPicker({ entries, appliedId, onApply, onClose, onCustom
         </div>
 
         <footer className="wp-foot">
-          <div className="wp-res" role="group" aria-label={t("wp.resAria") || "Custom resolution"}>
-            {(["360", "480", "720", "1080"] as const).map((r) => (
-              <button
-                key={r}
-                className={`wp-res-chip ${customRes === r ? "active" : ""}`}
-                onClick={() => { setCustomRes(r); setResLocal(r); }}
-                aria-pressed={customRes === r}
-              >
-                {r}P
-              </button>
-            ))}
-            <span className="wp-res-note">max 1080P</span>
+          <div className="wp-auto">
+            <span className="wp-auto-badge">1080P</span>
+            <span className="wp-res-note">custom images auto-saved at max 1080P</span>
           </div>
           <div className="wp-keys">
             <span>J/K</span>

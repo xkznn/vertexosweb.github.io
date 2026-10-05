@@ -2059,11 +2059,11 @@ onSessionClose: (peerCode) => {
   const verticalDock = taskbarPos === "left" || taskbarPos === "right";
   const dockMaxWidth = dockViewport.width <= 760 ? Math.max(160, dockViewport.width - 24) : Math.min(1180, dockViewport.width - 420);
   const dockCapacity = verticalDock
-    ? Math.max(3, Math.floor((dockViewport.height - 250) / 52))
-    : Math.max(3, Math.floor((dockMaxWidth - 200) / 52));
+    ? Math.max(4, Math.floor((dockViewport.height - 200) / 56))
+    : Math.max(4, Math.floor((dockMaxWidth - 180) / 56));
   const dockEntries = apps.filter((app) => isPinned(app.id) || windows.some((win) => win.id === app.id));
   const dockOverflowed = dockEntries.length > dockCapacity;
-  const visibleDockEntries = dockEntries.slice(0, dockOverflowed ? dockCapacity - 1 : dockCapacity);
+  const visibleDockEntries = dockOverflowed ? dockEntries.slice(0, dockCapacity) : dockEntries.slice(0, dockCapacity);
 
   return (
         <main className={`os-root${PERF.low ? " perf-low" : ""}`} onClick={() => { setContextMenu(null); setAppMenu(null); setWidgetMenu(null); setDockMenu(null); setDockOverflowOpen(false); }} onContextMenu={(event) => {
@@ -2374,12 +2374,12 @@ onSessionClose: (peerCode) => {
           <button className="dock-button" data-dock-label="All apps" onClick={(event) => { event.stopPropagation(); setDrawerOpen((open) => !open); setStartOpen(false); }} aria-label="Open app drawer" data-testid="button-app-drawer"><Grid2X2 size={20} /></button>
           <span className="dock-separator" />
           <span className="dock-apps">
-            {visibleDockEntries.map((app) => {
+            {visibleDockEntries.slice(0, dockOverflowed ? Math.max(0, dockCapacity - 1) : dockCapacity).map((app) => {
               const themed = getApp(app.id, appOverrides);
               const isOpen = windows.some((item) => item.id === app.id);
               return <button key={app.id} className={`dock-button ${isOpen ? "active open" : ""}`} data-dock-label={themed.title} onClick={(event) => { event.stopPropagation(); toggleApp(app.id); }} onMouseEnter={(event) => { if (isOpen) openTaskPreview(event, app.id); }} onMouseLeave={isOpen ? pendingHideTaskPreview : undefined} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); openAppMenu(app.id, event.clientX, event.clientY); }} title={themed.title} data-testid={`button-dock-${app.id}`}><AppIcon app={themed} size={20} /></button>;
             })}
-            {dockOverflowed && <button className={`dock-button dock-overflow-trigger${dockOverflowOpen ? " active" : ""}`} data-dock-label="Show all taskbar apps" aria-label="Show all taskbar apps" title="Show all taskbar apps" aria-expanded={dockOverflowOpen} onClick={(event) => { event.stopPropagation(); setDockOverflowOpen((open) => !open); setPreviewId(null); setPreviewPos(null); }}><ChevronDown size={19} /></button>}
+            {dockOverflowed && <button className={`dock-button dock-overflow-trigger${dockOverflowOpen ? " active" : ""}`} data-dock-label="Show all taskbar apps" aria-label="Show all taskbar apps" title="Show all taskbar apps" aria-expanded={dockOverflowOpen} onClick={(event) => { event.stopPropagation(); setDockOverflowOpen((open) => !open); setPreviewId(null); setPreviewPos(null); }}><ChevronUp size={19} /></button>}
           </span>
           <span className="dock-separator" />
           {dockOverflowOpen && dockOverflowed && <div className={`dock-overflow-panel${verticalDock ? ` dock-overflow-panel--${taskbarPos}` : taskbarPos === "top" ? " dock-overflow-panel--top" : ""}`} role="dialog" aria-label="All taskbar apps" onClick={(event) => event.stopPropagation()}>
@@ -5511,31 +5511,7 @@ function NowPlayingCard() {
     const total = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
     return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
   };
-  return (
-    <div className={`np-card np-${session.source}`} data-testid="now-playing-card">
-      <button className="np-close" onClick={() => session.onClose?.()} aria-label="Close now playing"><X size={14} /></button>
-      <div className="np-body">
-        <div className="np-art">
-          {session.artwork ? <img src={session.artwork} alt="" /> : <span className="np-art-ph"><Music2 size={22} /></span>}
-          <span className={`np-eq ${session.playing ? "on" : ""}`} aria-hidden="true"><i /><i /><i /></span>
-        </div>
-        <div className="np-meta">
-          <span className="np-source">{session.source === "video" ? "Now playing · Video" : "Now playing"}</span>
-          <strong className="np-title">{session.title || "Untitled"}</strong>
-          <span className="np-artist">{session.artist || "Unknown"}</span>
-        </div>
-        <button className="np-toggle" onClick={() => session.onToggle?.()} aria-label={session.playing ? "Pause" : "Play"}>
-          {session.playing ? <Pause size={17} /> : <Play size={17} />}
-        </button>
-      </div>
-      <div className="np-bar">
-        <span className="np-time">{fmt(prog)}</span>
-        <input className="np-seek" type="range" min={0} max={dur || 100} step={0.5} value={dur ? Math.min(prog, dur) : 0} onChange={(event) => session.onSeek?.(Number(event.target.value))} aria-label="Seek" />
-        <span className="np-time">{dur ? fmt(dur) : "--:--"}</span>
-      </div>
-      <span className="np-progress-line" style={{ width: `${pct}%` }} />
-    </div>
-  );
+    return null;
 }
 
 const EAGLER_SINGLE = "/eaglercraft/index.html";

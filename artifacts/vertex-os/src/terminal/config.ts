@@ -22,6 +22,9 @@ export type TerminalConfig = {
   wallpaper: string;
   scanlines: boolean;
   glow: boolean;
+  fsociety: boolean;
+  nmap: boolean;
+  metasploit: boolean;
 };
 
 export const TERMINAL_CONFIG_KEY = "vertex-terminal-config";
@@ -60,6 +63,9 @@ export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   wallpaper: "",
   scanlines: false,
   glow: true,
+  fsociety: false,
+  nmap: false,
+  metasploit: false,
 };
 
 export function fontStackFor(id: string): string {

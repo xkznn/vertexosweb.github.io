@@ -161,6 +161,7 @@ overrides:
 
 allowBuilds:
   '@firebase/util': set this to true or false
+  bufferutil: false
   electron: true
   esbuild: true
   protobufjs: set this to true or false

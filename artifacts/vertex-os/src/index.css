@@ -348,7 +348,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .desktop-icon:nth-child(3n) .icon-tile { color: var(--orange); }
 .desktop-icon span { max-width: 82px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(244,247,251,.86); font-size: 11px; letter-spacing: .03em; text-shadow: 0 2px 8px #000; }
 
-.dock { position: absolute; z-index: 20; bottom: 20px; left: 50%; transform: translateX(-50%); min-height: 62px; max-width: calc(100% - 28px); display: flex; align-items: center; gap: 7px; padding: 8px 11px; background: rgba(6,13,24,.74); border: 1px solid var(--line-strong); border-radius: 15px; backdrop-filter: blur(22px); box-shadow: 0 18px 50px rgba(0,0,0,.34); }
+.dock { position: absolute; z-index: 20; bottom: 20px; left: 50%; transform: translateX(-50%); min-height: 62px; max-width: calc(100% - 28px); display: flex; align-items: center; gap: 7px; padding: 8px 11px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); border-radius: 16px; backdrop-filter: blur(30px) saturate(1.8); -webkit-backdrop-filter: blur(30px) saturate(1.8); box-shadow: 0 20px 60px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.25); }
 .dock-separator { width: 1px; height: 30px; background: var(--line); margin: 0 4px; }
 .dock-button { width: 44px; height: 44px; margin: 0 -3px; position: relative; display: grid; place-items: center; color: var(--muted); background: transparent; --dock-scale: 1; --dock-lift: 0px; transform-origin: 50% 100%; transition: transform .22s cubic-bezier(.2,.9,.25,1), color .2s ease, background .2s ease; will-change: transform; }
 .dock-button:hover, .dock-button.active { color: var(--ink); background: rgba(255,255,255,.08); transform: translateY(calc(var(--dock-lift) - 5px)) scale(var(--dock-scale)); }
@@ -979,7 +979,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .send-button { width: 35px; height: 35px; display: grid; place-items: center; background: var(--cyan); color: #07101c; }
 
 /* ==== System tray (Windows 11 style) ==== */
-.system-tray { position: absolute; z-index: 30; right: 28px; bottom: 26px; display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: rgba(8,14,24,.72); border: 1px solid var(--line-strong); border-radius: 12px; backdrop-filter: blur(22px); box-shadow: 0 18px 50px rgba(0,0,0,.34); }
+.system-tray { position: absolute; z-index: 30; right: 28px; bottom: 26px; display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); border-radius: 14px; backdrop-filter: blur(30px) saturate(1.8); -webkit-backdrop-filter: blur(30px) saturate(1.8); box-shadow: 0 20px 60px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.25); }
 .tray-scrim { position: absolute; inset: 0; z-index: 29; }
 .tray-time { font: 600 15px var(--font-display); letter-spacing: .03em; }
 .tray-date { font-size: 10px; color: var(--muted); }
@@ -1550,7 +1550,7 @@ a.toast { text-decoration: none; color: var(--ink); cursor: pointer; }
 .context-submenu button { padding-left: 12px; }
 .desktop-shell.icon-small .desktop-icon { transform: scale(.82); }
 .desktop-grid.hidden { display: none; }
-.desktop-shell.custom-cursor, .desktop-shell.custom-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><defs><linearGradient id='ring' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23aef3ff'/><stop offset='0.5' stop-color='%233fb6ff'/><stop offset='1' stop-color='%237048ff'/></linearGradient><radialGradient id='core' cx='0.5' cy='0.4' r='0.65'><stop offset='0' stop-color='%23ffffff'/><stop offset='0.55' stop-color='%238ce6ff'/><stop offset='1' stop-color='%232ea8f0'/></radialGradient></defs><circle cx='16' cy='16' r='13.5' fill='none' stroke='%2357c8ff' stroke-width='7' opacity='0.25'/><circle cx='16' cy='16' r='10.5' fill='none' stroke='%2327a5ff' stroke-width='3.6' opacity='0.5'/><circle cx='16' cy='16' r='9.5' fill='none' stroke='url(%23ring)' stroke-width='2.4'/><circle cx='16' cy='16' r='3.6' fill='url(%23core)' stroke='%2303202e' stroke-width='1.2'/><circle cx='16' cy='4.6' r='1.1' fill='%23baf3ff'/><circle cx='16' cy='27.4' r='1.1' fill='%23baf3ff'/><circle cx='4.6' cy='16' r='1.1' fill='%23baf3ff'/><circle cx='27.4' cy='16' r='1.1' fill='%23baf3ff'/></svg>") 16 16, auto; }
+.desktop-shell.custom-cursor, .desktop-shell.custom-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23f2e5bc'/><stop offset='0.5' stop-color='%23d8b04b'/><stop offset='1' stop-color='%23a88124'/></linearGradient><radialGradient id='c' cx='50%' cy='40%' r='60%'><stop offset='0' stop-color='%23fff7d6'/><stop offset='0.6' stop-color='%23f0d77c'/><stop offset='1' stop-color='%23c9a133'/></radialGradient></defs><circle cx='18' cy='18' r='16' fill='none' stroke='%23e6d89c' stroke-width='5' opacity='0.25'/><circle cx='18' cy='18' r='12' fill='none' stroke='%23d8b04b' stroke-width='3' opacity='0.5'/><circle cx='18' cy='18' r='10.5' fill='none' stroke='url(%23g)' stroke-width='2.5'/><circle cx='18' cy='18' r='4' fill='url(%23c)' stroke='%23220' stroke-width='1.2'/></svg>") 18 18, auto; }
 .desktop-shell.press-fx button:active, .desktop-shell.press-fx .desktop-icon:active, .desktop-shell.press-fx .pinned-item:active, .desktop-shell.press-fx .drawer-item:active, .desktop-shell.press-fx .dock-button:active { transform: scale(.93); }
 .personalize-card .setting-row { padding: 10px 0; }
 
@@ -5035,60 +5035,62 @@ html[data-style="macos"] .win-settings-search {
 }
 .dock-overflow-trigger svg { transition: transform .16s ease; }
 .dock-overflow-trigger[aria-expanded="true"] svg { transform: rotate(180deg); }
+.dock-overflow-trigger[aria-label="Show all taskbar apps"] svg { transform: rotate(0deg); }
+.dock-overflow-trigger[aria-expanded="true"][aria-label="Show all taskbar apps"] svg { transform: rotate(180deg); }
+.dock:not(.dock--left):not(.dock--right) .dock-overflow-trigger[aria-label="Show all taskbar apps"] svg { transform: rotate(180deg); }
+.dock:not(.dock--left):not(.dock--right) .dock-overflow-trigger[aria-expanded="true"][aria-label="Show all taskbar apps"] svg { transform: rotate(0deg); }
 .dock-overflow-panel {
   position: absolute;
   z-index: 40;
   left: 50%;
   bottom: calc(100% + 13px);
-  width: min(364px, calc(100vw - 28px));
+  width: min(380px, calc(100vw - 28px));
   max-height: calc(100vh - 36px);
   overflow: auto;
   padding: 12px;
   transform: translateX(-50%);
-  border: 1px solid rgba(255,255,255,.66);
-  border-radius: 16px;
-  color: #17202c;
-  background: rgba(250,251,253,.86);
-  box-shadow: 0 18px 50px rgba(4,13,28,.27), inset 0 1px 0 rgba(255,255,255,.8);
-  backdrop-filter: blur(28px) saturate(1.55);
-  -webkit-backdrop-filter: blur(28px) saturate(1.55);
+  border: 1px solid rgba(255,255,255,.26);
+  border-radius: 18px;
+  color: var(--ink);
+  background: rgba(255,255,255,.12);
+  box-shadow: 0 28px 80px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.25);
+  backdrop-filter: blur(36px) saturate(1.9);
+  -webkit-backdrop-filter: blur(36px) saturate(1.9);
   animation: dock-overflow-in .16s cubic-bezier(.2,.8,.2,1) both;
 }
 .dock-overflow-panel--top { top: calc(100% + 13px); bottom: auto; transform: translateX(-50%); }
 .dock-overflow-panel--left { left: calc(100% + 13px); bottom: auto; top: 50%; transform: translateY(-50%); }
 .dock-overflow-panel--right { left: auto; right: calc(100% + 13px); bottom: auto; top: 50%; transform: translateY(-50%); }
 .dock-overflow-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
-.dock-overflow-app {
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-width: 0;
-  height: 54px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  color: #182230;
-  background: transparent;
-  cursor: pointer;
-  transition: background .12s ease, border-color .12s ease, transform .12s ease;
-}
-.dock-overflow-app:hover { transform: translateY(-1px); border-color: rgba(70,104,147,.13); background: rgba(255,255,255,.82); }
+  .dock-overflow-app {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    height: 58px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    color: var(--ink);
+    background: transparent;
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease, transform .12s ease, box-shadow .12s ease;
+  }
+  .dock-overflow-app:hover { transform: translateY(-1px); border-color: rgba(255,255,255,.3); background: rgba(255,255,255,.18); box-shadow: 0 6px 20px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.2); }
 .dock-overflow-app.is-open::after { content:""; position:absolute; bottom:3px; left:50%; width:4px; height:4px; transform:translateX(-50%); border-radius:50%; background:#3c91df; }
 @keyframes dock-overflow-in { from { opacity:0; filter:blur(3px); } to { opacity:1; filter:blur(0); } }
 @media (max-width: 560px) { .dock-overflow-panel { width:min(318px,calc(100vw - 20px)); } .dock-overflow-grid { grid-template-columns:repeat(5,minmax(0,1fr)); } }
 
 /* Classic genie minimize — smoother, less blur */
-html[data-style="macos"] .desktop-shell .app-window.minimized {
-  transform-origin: 50% 100%;
-  opacity: 0;
-  animation: mac-genie .42s cubic-bezier(.33, 0, .2, 1) forwards;
-  will-change: transform, opacity;
-}
-@keyframes mac-genie {
-  0%   { transform: translateY(0) scale(1, 1); opacity: 1; filter: blur(0); }
-  32%  { transform: translateY(7%) scale(1.02, .95); opacity: 1; filter: blur(0); }
-  64%  { transform: translateY(44%) scale(.6, .76); opacity: .9; filter: blur(1px); }
-  100% { transform: translateY(96%) scale(.06, .26); opacity: 0; filter: blur(4px); }
-}
+  html[data-style="macos"] .desktop-shell .app-window.minimized {
+    transform-origin: 50% 100%;
+    opacity: 0;
+    animation: mac-genie .2s cubic-bezier(.2, .8, .2, 1) forwards;
+    will-change: transform, opacity;
+  }
+  @keyframes mac-genie {
+    0%   { transform: translateY(0) scale(1, 1); opacity: 1; filter: blur(0); }
+    100% { transform: translateY(120%) scale(.01, .1); opacity: 0; filter: blur(0); }
+  }
 @media (prefers-reduced-motion: reduce) {
   html[data-style="macos"] .desktop-shell .app-window.minimized {
     animation: none;

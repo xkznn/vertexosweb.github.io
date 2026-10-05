@@ -1,9 +1,61 @@
 import path from 'path';
+import { createReadStream, readFileSync } from 'node:fs';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin, type ViteDevServer, type PreviewServer } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
+import { handleWispUpgrade } from './wisp-server.mjs';
+
+const appRoot = import.meta.dirname;
+const proxyAssets = new Map<string, string>([
+  ['/scramjet/scramjet.js', path.join(appRoot, 'node_modules/@mercuryworkshop/scramjet/dist/scramjet.js')],
+  ['/scramjet/scramjet.wasm', path.join(appRoot, 'node_modules/@mercuryworkshop/scramjet/dist/scramjet.wasm')],
+  ['/controller/controller.api.js', path.join(appRoot, 'node_modules/@mercuryworkshop/scramjet-controller/dist/controller.api.js')],
+  ['/controller/controller.sw.js', path.join(appRoot, 'node_modules/@mercuryworkshop/scramjet-controller/dist/controller.sw.js')],
+  ['/controller/controller.inject.js', path.join(appRoot, 'node_modules/@mercuryworkshop/scramjet-controller/dist/controller.inject.js')],
+  ['/utils/scramjet-utils.js', path.join(appRoot, 'node_modules/@mercuryworkshop/scramjet-utils/dist/scramjet-utils.js')],
+]);
+
+function scramjetRuntimePlugin(): Plugin {
+  const serveProxyAsset = (server: ViteDevServer) => {
+    server.middlewares.use((request, response, next) => {
+      const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+      const file = proxyAssets.get(pathname);
+      if (!file) {
+        next();
+        return;
+      }
+      response.setHeader('Content-Type', pathname.endsWith('.wasm') ? 'application/wasm' : 'text/javascript; charset=utf-8');
+      response.setHeader('Cache-Control', 'public, max-age=3600');
+      createReadStream(file).on('error', next).pipe(response);
+    });
+  };
+
+  const attachWisp = (server: { httpServer: ViteDevServer['httpServer'] | PreviewServer['httpServer'] }) => {
+    server.httpServer?.on('upgrade', handleWispUpgrade);
+  };
+
+  return {
+    name: 'vertex-scramjet-runtime',
+    configureServer(server) {
+      serveProxyAsset(server);
+      attachWisp(server);
+    },
+    configurePreviewServer(server) {
+      attachWisp(server);
+    },
+    generateBundle() {
+      for (const [fileName, sourcePath] of proxyAssets) {
+        this.emitFile({
+          type: 'asset',
+          fileName: fileName.slice(1),
+          source: readFileSync(sourcePath),
+        });
+      }
+    },
+  };
+}
 
 const rawPort = process.env.PORT;
 
@@ -30,6 +82,7 @@ if (!basePath) {
 export default defineConfig({
   base: basePath,
   plugins: [
+    scramjetRuntimePlugin(),
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
