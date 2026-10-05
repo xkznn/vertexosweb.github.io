@@ -3406,10 +3406,10 @@ a.toast { text-decoration: none; color: var(--ink); cursor: pointer; }
   transition: opacity .22s ease, transform .3s cubic-bezier(.4,0,.9,.4), padding .22s ease;
 }
 .desktop-shell.chrome-hidden .system-tray { opacity: 0; pointer-events: none; }
-.desktop-shell.chrome-hidden .dock { transform: translate(-50%, 130%); }
-.desktop-shell.chrome-hidden .dock--top { transform: translate(-50%, -130%); }
-.desktop-shell.chrome-hidden .dock--left { transform: translateY(-50%) translateX(-130%); }
-.desktop-shell.chrome-hidden .dock--right { transform: translateY(-50%) translateX(130%); }
+.desktop-shell.chrome-hidden .dock { transform: translate(-50%, 0); }
+.desktop-shell.chrome-hidden .dock--top { transform: translate(-50%, 0); }
+.desktop-shell.chrome-hidden .dock--left { transform: translateY(-50%) translateX(0); }
+.desktop-shell.chrome-hidden .dock--right { transform: translateY(-50%) translateX(0); }
 
 /* reveal on edge hover */
 .desktop-shell.chrome-hidden .tb-hotzone--bottom:hover ~ .dock,

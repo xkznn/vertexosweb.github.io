@@ -1,0 +1,37 @@
+headersOrigin = "config"
+plugins = []
+redirects = []
+
+[functions]
+
+[functions."*"]
+
+[build]
+publish = "C:\\Users\\ferna\\Downloads\\Vertex-OS-Website\\Vertex-OS-Website\\artifacts\\vertex-os\\dist\\public"
+publishOrigin = "config"
+commandOrigin = "config"
+base = "C:\\Users\\ferna\\Downloads\\Vertex-OS-Website\\Vertex-OS-Website\\artifacts\\vertex-os"
+command = "npm run build"
+
+[build.environment]
+PORT = "4173"
+BASE_PATH = "/"
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[[headers]]
+for = "/*"
+
+[headers.values]
+X-Content-Type-Options = "nosniff"
+Referrer-Policy = "strict-origin-when-cross-origin"

@@ -1,0 +1,8 @@
+$ vite --config vite.config.ts --host 0.0.0.0
+[31merror when starting dev server:
+Error: Port 5173 is already in use
+    at Server.onError$1 (file:///C:/Users/ferna/Downloads/Vertex-OS-Website/Vertex-OS-Website/node_modules/.pnpm/vite@7.3.6_@types+node@25.9_22f5c7802df5b2068791fac98a817e62/node_modules/vite/dist/node/chunks/config.js:15006:28)
+    at Server.emit (node:events:509:28)
+    at emitErrorNT (node:net:2045:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)[39m
+[ELIFECYCLE] Command failed with exit code 1.
