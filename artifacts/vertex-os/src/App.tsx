@@ -1,4 +1,4 @@
-﻿import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -6,28 +6,132 @@ import {
   Code2, Compass, Cpu, Download, Eye, Gamepad2, Grid2X2,
   Image, LayoutGrid, LockKeyhole, Menu, MessageCircle, Minus, MonitorCog, Music2,
   Palette, Pin, PinOff, Play, Power, Puzzle, Radio, Rocket, RotateCcw,
-  Settings2, ShieldBan, SlidersHorizontal, Search, Sparkles, Terminal, Volume2, VolumeX, Waves, X, Pause, Maximize, Maximize2, Minimize2, House, Plus, Package, EyeOff, ExternalLink, Contrast, Calculator, Bot,
+  Settings2, ShieldBan, SlidersHorizontal, Search, Sparkles, Terminal, Volume2, VolumeX, Waves, X, Pause, Maximize, Maximize2, Minimize2, House, Plus, Package, EyeOff, ExternalLink, Contrast, Calculator,
+  Shuffle, Repeat, Clock, ListVideo, Trash2, Link2, User, Languages, Info, Monitor, Paintbrush, SunMoon,
 } from "lucide-react";
 
-import { MessagesSurface } from "./messages";
-import { ChronusGPTSurface } from "./chronusgpt";
+
 import { Ps5EmulatorSurface } from "./components/ps5-emulator";
+import { VerAiSurface } from "./components/ver-ai";
+import { BrowserSurface } from "./components/browser-app";
+import { VertexStudioWallpaper } from "./components/vertex-wallpaper";
+import { HalloweenDecor, HalloweenWallpaper } from "./components/halloween";
+import { MusicWidgetLayer, MusicWidgetManager } from "./components/music-widgets";
+import { LockAppsLayer, LockAppsManager, recordRecentApp } from "./components/lock-apps";
+import { MessagesSurface } from "./messages";
 import { MC_REALMS, type McRealm } from "./mcrealms";
 import { LANG, LANGS, t, tf, tp, readLang, saveLang, localeOf, type Lang } from "./i18n";
 import { WallpaperPicker, type PickerWallpaper, loadCustomWallpapers, persistCustomWallpaper, removeCustomWallpaper, readCustomWallpapersLocal } from "./components/wallpaper-picker";
+import { SystemTray } from "./components/system-tray";
+import { MacMenuBar } from "./components/mac-menubar";
+import { AlternativePanel, DesktopWidgets, MovableWidget, type WidgetId, type WidgetPosition, type WidgetSkin } from "./components/desktop-widgets";
+import { LinksApp } from "./components/links-app";
 import { TerminalBanner } from "./terminal/TerminalBanner";
 import { ansiToNodes } from "./terminal/ansi";
 import { CUSTOM_BANNER_ID, CUSTOM_PALETTE_ID, TERMINAL_BANNERS, TERMINAL_PALETTES, getBanner, getPalette, normalizeHex, type TerminalPalette } from "./terminal/banners";
 import { DEFAULT_TERMINAL_CONFIG, TERMINAL_CURSORS, TERMINAL_FONTS, readTerminalConfig, terminalCssVars, terminalHasWallpaper, writeTerminalConfig, type TerminalConfig } from "./terminal/config";
 import { PERF } from "./perf";
-type WallpaperId = "singularity" | "snake-skeleton" | "snow-fox" | "cine55" | "gojo" | "rainy-city" | "green-anime" | "brother" | "99-med" | "gojo-sukuna" | "sukuna-fire" | "desktop-lines" | "skello" | "we-black-hole" | "we-snow-fox" | "we-gojo-sukuna" | "we-sukuna-fire" | "we-cine-55" | "we-snake" | "we-green-anime" | "we-brother" | "we-gojo" | "we-rainy-city" | "we-desktop-lines" | "we-skello" | "we-99-med" | "we-45e33" | "we-f1-formula" | "we-hunt-shadow-2" | "we-minecraft-01" | "we-minecraft-02" | "we-minecraft-03" | "we-monkey" | "we-supra-drift" | "we-yuji-52" | "we-cozy-fox" | "we-yuta" | "we-bmw-car-driving" | "we-eyes-toward-heaven" | "we-goku-ultra" | "we-galaxy-eyes" | "we-celestial-battle" | "we-tess-kotkin" | "we-yuta-rika" | "we-satoru-gojo" | "we-dark-angel" | "we-makima-devilish" | "we-makima-burning" | "we-haimiya-mio" | "we-toji" | "we-mamonir" | "we-lantern-festival" | "we-miyabi" | "we-qingxiao" | "we-megumin" | "we-odette" | "we-blue-sky" | "we-frutiger" | "we-synthwave-dmc" | "we-zankou" | "we-ghost-rider" | "we-molala" | "we-dark-king" | "we-celestial-veil" | "we-miku-nakano" | "we-gotoubun" | "we-quintuplets" | "we-black-silk-waves" | "we-blue-dragon-logo" | "we-astra-yao" | "we-luo-tianyi-christmas" | "we-mc-northern-light" | "we-mc-falling-snow" | "we-mc-aquarium" | "we-mc-holiday-heart" | "we-mc-fireplace" | "we-mc-panels" | "we-mc-cherry-blossom" | "we-mc-raindrops" | "we-silver-surfer" | "we-girl-behind-curtains" | "we-vagabond-miyamoto" | "we-itachi-crow" | "we-gojo-hollow" | "we-quintuplets-sister" | "we-yuta-okkotsu" | "we-gojo-vs-sukuna-2" | "we-gojo-cursed-world" | "we-gojo-six-eyes" | "we-frieren-blue-horizon" | "we-frieren-blooming-stream" | "we-nissan-skyline-r33-mc" | "we-torii";
-type AppId = "hub" | "spicetify" | "chronusgpt" | "browser" | "pizza" | "roblox" | "messages" | "settings" | "games" | "translucenttb" | "wallpaper-engine" | "minecraft" | "rainmeter" | "terminal" | "calculator";
+import { GhostPayloadCard, GhostViewSurface, captureScreenHtml, ghostDeliver, ghostExecute, ghostProbe, ghostSetSnapGetter, ghostSetStatus, ghostStop, ghostUiStore, snapSig, startGhostView, useGhostViewUi, type GvIncoming, type GvSnap, type GvWindow } from "./ghostview";
+import { getMediaSession, setMediaSession, notifyMediaSession, subscribeMediaSession, type MediaSession } from "./now-playing";
+type WallpaperId = "vertex-studio" | "halloween" | "macos-default" | "macos-lock" | "singularity" | "snake-skeleton" | "snow-fox" | "cine55" | "gojo" | "rainy-city" | "green-anime" | "brother" | "99-med" | "gojo-sukuna" | "sukuna-fire" | "desktop-lines" | "skello" | "we-black-hole" | "we-snow-fox" | "we-gojo-sukuna" | "we-sukuna-fire" | "we-cine-55" | "we-snake" | "we-green-anime" | "we-brother" | "we-gojo" | "we-rainy-city" | "we-desktop-lines" | "we-skello" | "we-99-med" | "we-45e33" | "we-f1-formula" | "we-hunt-shadow-2" | "we-minecraft-01" | "we-minecraft-02" | "we-minecraft-03" | "we-monkey" | "we-supra-drift" | "we-yuji-52" | "we-cozy-fox" | "we-yuta" | "we-bmw-car-driving" | "we-eyes-toward-heaven" | "we-goku-ultra" | "we-galaxy-eyes" | "we-celestial-battle" | "we-tess-kotkin" | "we-yuta-rika" | "we-satoru-gojo" | "we-dark-angel" | "we-makima-devilish" | "we-makima-burning" | "we-haimiya-mio" | "we-toji" | "we-mamonir" | "we-lantern-festival" | "we-miyabi" | "we-qingxiao" | "we-megumin" | "we-odette" | "we-blue-sky" | "we-frutiger" | "we-synthwave-dmc" | "we-zankou" | "we-ghost-rider" | "we-molala" | "we-dark-king" | "we-celestial-veil" | "we-miku-nakano" | "we-gotoubun" | "we-quintuplets" | "we-black-silk-waves" | "we-blue-dragon-logo" | "we-astra-yao" | "we-luo-tianyi-christmas" | "we-mc-northern-light" | "we-mc-falling-snow" | "we-mc-aquarium" | "we-mc-holiday-heart" | "we-mc-fireplace" | "we-mc-panels" | "we-mc-cherry-blossom" | "we-mc-raindrops" | "we-silver-surfer" | "we-girl-behind-curtains" | "we-vagabond-miyamoto" | "we-itachi-crow" | "we-gojo-hollow" | "we-quintuplets-sister" | "we-yuta-okkotsu" | "we-gojo-vs-sukuna-2" | "we-gojo-cursed-world" | "we-gojo-six-eyes" | "we-frieren-blue-horizon" | "we-frieren-blooming-stream" | "we-nissan-skyline-r33-mc" | "we-torii";
+type AppId = "hub" | "spicetify" | "browser" | "pizza" | "roblox" | "messages" | "verai" | "vertube" | "settings" | "games" | "translucenttb" | "wallpaper-engine" | "minecraft" | "rainmeter" | "terminal" | "calculator" | "ghostview" | "links";
+type Ps5DesktopShortcut = { id: string; name: string; cover: string };
+type TaskbarPos = "bottom" | "top" | "left" | "right";
 type WindowRect = { x: number; y: number; w: number; h: number };
-type WindowState = { id: AppId; minimized: boolean; maximized: boolean; rect: WindowRect; prevRect: WindowRect | null };
+type WindowState = { id: AppId; minimized: boolean; maximized: boolean; rect: WindowRect; prevRect: WindowRect | null; closingAt?: number };
 type Wallpaper = { id: WallpaperId; name: string; meta: string; video?: string; image?: string; videoLow?: string };
-type SystemSettings = { optimized: boolean; fastBoot: boolean; idleLock: boolean; confirm: boolean; cloak: string; cloakName: string; cloakIcon: string; panicKey: string; panicUrl: string; adblock: boolean; adblockUrl: string };
-const defaultSettings: SystemSettings = { optimized: false, fastBoot: false, idleLock: false, confirm: false, cloak: "none", cloakName: "Vertex-OS", cloakIcon: "", panicKey: "`", panicUrl: "", adblock: false, adblockUrl: "" };
+type ColorMode = "dark" | "light";
+type SystemStyle = "vertex" | "macos";
+type SystemSettings = { optimized: boolean; fastBoot: boolean; idleLock: boolean; confirm: boolean; cloak: string; cloakName: string; cloakIcon: string; panicKey: string; panicUrl: string; adblock: boolean; adblockUrl: string; deviceName: string; colorMode: ColorMode; systemStyle: SystemStyle };
+const defaultSettings: SystemSettings = { optimized: false, fastBoot: false, idleLock: false, confirm: false, cloak: "none", cloakName: "Vertex-OS", cloakIcon: "", panicKey: "`", panicUrl: "", adblock: false, adblockUrl: "", deviceName: "VERTEX-PC", colorMode: "dark", systemStyle: "vertex" };
 const PASSWORD_KEY = "vertex-password";
+const PROFILE_KEY = "vertex-profile";
+const ACCOUNTS_KEY = "vertex-accounts";
+const VERTEX_VERSION = "4.1";
+const HALLOWEEN_ACTIVE = new Date().getMonth() === 9;
+const SEASON_WALLPAPER: WallpaperId = HALLOWEEN_ACTIVE ? "halloween" : "vertex-studio";
+
+type VertexAccount = { id: string; name: string; createdAt: number; pass?: string; avatar?: string; email?: string };
+
+const PRESET_AVATARS = ["🦊", "🐼", "🐸", "🐙", "🌙", "🔥", "⚡", "🎧", "🚀", "🌈", "💀", "🫀"];
+
+const PROFILE_ANIME_AVATARS = [
+  "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21-ELSYx3yMPcKM.jpg",
+  "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx97888-tdZ1r7qN1DRs.jpg",
+  "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx124195-5Z1JSrRlbMRe.jpg",
+  "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx269-d2GmRkJbMopq.png",
+  "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx189046-yaHWtS5FII46.jpg",
+  "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx178789-hNXjKFzUq7mk.jpg",
+  "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx210482-P1VNKbqdJ6Zj.jpg",
+  "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx74347-sZpmNJ5xLwRK.jpg",
+  "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx106130-yPNeuSu75ey1.jpg",
+  "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/nx86399-NwbRFVh5koqc.jpg",
+];
+const AVATAR_MAX_PIX = 320;
+const AVATAR_MAX_GIF = 4 * 1024 * 1024;
+
+function avatarFromFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const isGif = /image\/gif/.test(file.type);
+    const isPng = /image\/png/.test(file.type);
+    if (isGif && file.size <= AVATAR_MAX_GIF) {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result ?? ""));
+      r.onerror = () => reject(new Error("Couldn't read your GIF."));
+      r.readAsDataURL(file);
+      return;
+    }
+    if (!/image\//.test(file.type)) { reject(new Error("Pick an image or GIF file.")); return; }
+    const url = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      const scale = Math.min(1, AVATAR_MAX_PIX / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { URL.revokeObjectURL(url); reject(new Error("Canvas unavailable.")); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL(isPng ? "image/png" : "image/jpeg", 0.86));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Not a valid image.")); };
+    img.src = url;
+  });
+}
+
+function readAccounts(): VertexAccount[] {
+  try {
+    const raw = storage.read<string>(ACCOUNTS_KEY, "");
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        return list
+          .filter((a) => a && typeof a.name === "string" && a.name.trim())
+          .map((a) => ({
+            id: typeof a.id === "string" && a.id ? a.id : `a${Math.random().toString(36).slice(2, 9)}`,
+            name: a.name.trim(),
+            createdAt: Number(a.createdAt) || 0,
+            pass: typeof a.pass === "string" ? a.pass : "",
+            avatar: typeof a.avatar === "string" ? a.avatar : "",
+          })) as VertexAccount[];
+      }
+    }
+  } catch { /* fall through to legacy migration */ }
+  try {
+    const legacyRaw = storage.read<string>(PROFILE_KEY, "");
+    const legacyName = legacyRaw ? ((JSON.parse(legacyRaw) as { name?: string }).name ?? "") : "";
+    if (typeof legacyName === "string" && legacyName.trim()) {
+      const legacyPass = storage.read<string>(PASSWORD_KEY, "");
+      const account: VertexAccount = { id: "legacy", name: legacyName.trim(), createdAt: Date.now(), pass: legacyPass || "" };
+      storage.write(ACCOUNTS_KEY, JSON.stringify([account]));
+      storage.remove(PROFILE_KEY);
+      storage.remove(PASSWORD_KEY);
+      return [account];
+    }
+  } catch { /* ignore */ }
+  return [];
+}
 
 const DROP_GRID_COLS = 8;
 const DROP_CELL_W = 94;
@@ -44,6 +148,53 @@ function defaultWindowRect(index: number): WindowRect {
   return { x, y, w, h };
 }
 
+function ghostTypeCtrl(text: string) {
+  const term = document.querySelector<HTMLInputElement>(".term-input");
+  const el = (term ?? document.activeElement) as HTMLInputElement | HTMLTextAreaElement | HTMLElement | null;
+  if (!el) return;
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    el.focus();
+    const set = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")?.set;
+    if (set) { set.call(el, (el.value ?? "") + text); } else { el.value += text; }
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  } else if (el.isContentEditable) {
+    el.focus();
+    el.textContent = (el.textContent ?? "") + text;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+}
+
+function ghostKeyCtrl(key: string) {
+  const term = document.querySelector<HTMLInputElement>(".term-input");
+  const el = (term ?? document.activeElement) as HTMLInputElement | HTMLElement | null;
+  if (!el) return;
+  const isText = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el.isContentEditable;
+  if (key === "Backspace" && isText) {
+    let cur = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.value : (el.textContent ?? "");
+    cur = cur.slice(0, -1);
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      const set = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")?.set;
+      if (set) { set.call(el, cur); } else { el.value = cur; }
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    } else {
+      el.textContent = cur;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  } else {
+    el.dispatchEvent(new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));
+    el.dispatchEvent(new KeyboardEvent("keyup", { key, code: key, bubbles: true }));
+  }
+}
+
+function ghostEnterCtrl() {
+  const term = document.querySelector<HTMLInputElement>(".term-input");
+  const el = (term ?? document.activeElement) as HTMLElement | null;
+  if (!el) return;
+  el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
+  el.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true }));
+}
+
 const base = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
 const asset = (path: string) => `${base}${path}`;
 
@@ -52,8 +203,10 @@ const nativeVideoQualified = !PERF.low && screenHighRes;
 const bgSrc = (nativeV?: string, lowV?: string) => (!nativeV ? undefined : lowV && !nativeVideoQualified ? lowV : nativeV);
 const pvSrc = (nativeV?: string, lowV?: string) => (!nativeV ? undefined : lowV ?? nativeV);
 
+const BOOT_INTRO_SRC = asset("boot-intro.mp4");
+
 const CLOAKS: Record<string, { title: string; icon: string }> = {
-  none: { title: "Vertex-OS", icon: asset("vertex-hub-logo.png") },
+  none: { title: "Vertex-OS", icon: asset(HALLOWEEN_ACTIVE ? "vertex-hub-logo-halloween.png" : "vertex-hub-logo.png") },
   google: {
     title: "Google",
     icon: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAA5FBMVEVHcEz9SlD/TkL/RUH/RUD/RkP4gyr/SUX/Rj//SE3/Yjb/UDn/Szz9TFb/Yi7/WTT8TVn/cyf/Zi7/iRz/fSL/lRb/SEjeuwX/qQ7/nhP/tgv9TFX6yQj/wwn/zAffugr8zgb+zwnzzQb4ywkvhv82qo79zgQek+ApjurzzAPlywIvhv0qifjRyQEth/y5yAKnxwAoivaMxQUak94fj+hzxAtawxdawhgLpa4OncYVltc8wCobvFIMuWgHqp0KorWaxQEnvz4bvUwPumUNumQMumgIr4wIqaIRvFoNu2MKtnRJwh6BPIl6AAAATHRSTlMAWZDK7P8Orf//Gv///+b/5P7////4dor///8qmP/9K0j/tu7/DeYwRP//HWr/rv///v/b///+HMT///+XTvD/5f//yGzw///////mXfQ9oAAAAWBJREFUeAF0z1UCgCAQRdEZ7O7u/W9STPr93oMCcENi2Y5jWwRBM9fz7zl0QeCFcidRHLMeJAkRj6dZdom/0+Uu62FRlpcQQILsfFVfIrqE/wPWoWleEXstYutdgO9dP9wi++/VCt0dx0dwL5u4DvNyiaFywbB1WS6ymfp+rJSMM5g2H7fYjOCsi5wOIAiCKNhRnG1bazv/fG7erFW/VcNezFEsKWVVZk2bOVi0BVuawE9GbcGOJrxoD3DEZD5ZtAcLdsX9vvWSW/ZM5g+H7JnHhFMcsI+CPpwXVOGSBsT8+Xy9VX5qfQerC77yDP94rEvB8/VCscO4z1f49+db8D9BFJEQ6N64/0hyqhVV03hxIo7+eMNLhmnZimLLjut6msCKZ3qhR+wN0/f9IAjD0PV4kV3rW/QoXF5sC4+KcEAShMkWzBeQ+QaFLX5rKrOWzcQjsHbUgCJbThA4lmwXVv8BPaBVEHC66TMAAAAASUVORK5CYII=",
@@ -62,6 +215,10 @@ const CLOAKS: Record<string, { title: string; icon: string }> = {
 };
 
 const wallpapers: Wallpaper[] = [
+  { id: "vertex-studio", name: "Vertex Studios", meta: "Animated · Vertex-OS", image: asset("images/vertex-studios-thumb.svg") },
+  { id: "halloween", name: "Halloween Night", meta: "Animated · Spooky", image: asset("images/halloween-thumb.svg") },
+  { id: "macos-default", name: "macOS 27", meta: "macOS · Default", image: asset("images/macos-27-home.jpg") },
+  { id: "macos-lock", name: "macOS 27 Night", meta: "macOS · Lock screen", image: asset("images/macos-27-lock.jpg") },
   { id: "singularity", name: "Singularity", meta: t("wpMeta.singularity"), video: asset("videos/BlackHole.mp4"), videoLow: asset("videos/low/BlackHole.mp4") },
   { id: "snake-skeleton", name: "Snake Skeleton", meta: t("wpMeta.snake"), video: asset("videos/default.mp4"), videoLow: asset("videos/low/default.mp4") },
   { id: "snow-fox", name: "Snow Fox", meta: t("wpMeta.snow"), video: asset("videos/SnowFox.mp4") },
@@ -210,18 +367,24 @@ const WE_POPULAR: WallpaperId[] = ["we-nissan-skyline-r33-mc", "we-black-hole", 
 
 wallpapers.push(...wallEngineEntries.map((e) => ({ id: e.id, name: e.name, meta: `${e.category} // ${e.resolution}`, video: e.video, image: e.image, videoLow: e.videoLow })));
 
+const WALLPAPER_IMAGE: Record<string, string> = {};
+[...wallpapers, ...wallEngineEntries].forEach((w) => { if (w.image) WALLPAPER_IMAGE[w.id] = w.image; });
+function wallImg(id: string): string | null { return WALLPAPER_IMAGE[id] ?? null; }
+
 const MC_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAMAAABF0y+mAAAATlBMVEVSpTVRpDRJli9PoDNMmzEAAwABDgIAAAA9eydUqTY9eygCAAUJCAhdpEE2ZiQfRxUgQRU6diYGFQUOIgk3byRGeTEVGhFBgCpYqztis0Op4b1OAAAAiUlEQVR4AdXLBQ7EIBRF0Y9Td9v/QvG6xEZvhZecAH8YwjZiJ3ETbZAyzrmQEUAkhZmMblHYAtrOGFuMT/h8M0nTNPHo5hYhs+WFKXcTDkVRKUxlFMEpQqlHSsnpXlU33CJv6io6YiuW2g9il5m6G5SRSV5h1fdDZM6h76sjwjhN4+Y8hNDmfGsa0OAJeZWq1QUAAAAASUVORK5CYII=";
 const RAINMETER_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAMAAABF0y+mAAAAVFBMVEVHcEwobJoma5oobZsjapkgapo6d6Mma5kcZ5d0m76mvtkma5rX4PTw8P9Th64japknbJqTsc++zuX19P/x6Orv39jou5DjoE/s1MPgjhzgkSnlrG/pPPZZAAAAEXRSTlMAOoEJ1f3/p+f//1r////AIySV8nYAAADzSURBVHgBYiAeMALqJI8kC2EYiBZBco4ic/97DmIS+Nu9fYpd3bfZMELXhD2gGFpDpdJgGkMFWOdDrEIjk3MZqjfF4K1zLsmuek12l6yv3BRHZR0rVW7qMRMzsj6UrVEqRkwTmkbjvXUsIKhfRpSgazSy8N0q/YMVrQY0TfP8S+3LJgFuXtZ12X62+vHxTfC07JfWZSai7fLwYf/I8DiOC5/LebwNDkgbQ8bHvpIa49N0O503ZbwRhMK8+Tx21rG4Ig89aDct53pfnDEUEcFk+dXZOe3HIipRgE/Z2qwVhu4jXiYAeo84mruvxNH0vYkPb74AqzITDrilOz4AAAAASUVORK5CYII=";
+const ARCH_ICON = asset("images/archlinux.png");
 
 const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; iconImg?: string; pinned?: boolean }[] = [
   { id: "hub", title: "Vertex-Hub", subtitle: t("appSub.hub"), icon: Sparkles, iconImg: asset("images/velara.png"), pinned: true },
   { id: "spicetify", title: "Spicetify", subtitle: t("appSub.spicetify"), icon: Music2, iconImg: asset("images/spicetify.ico"), pinned: true },
-  { id: "chronusgpt", title: "WormGPT", subtitle: t("appSub.spicetify"), icon: Bot, iconImg: asset("images/wormgpt.png"), pinned: true },
   { id: "wallpaper-engine", title: "Wallpaper Engine", subtitle: t("appSub.wallpaperEngine"), icon: Image, iconImg: asset("images/wallpaper-engine.gif"), pinned: true },
   { id: "browser", title: "Browser", subtitle: t("appSub.browser"), icon: Compass, iconImg: asset("images/endis-rest.png"), pinned: true },
   { id: "pizza", title: "Pizza edition", subtitle: t("appSub.pizza"), icon: Compass, iconImg: asset("images/pizza.ico"), pinned: true },
   { id: "roblox", title: "Roblox", subtitle: t("appSub.roblox"), icon: Gamepad2, iconImg: asset("images/roblox.ico"), pinned: true },
   { id: "messages", title: "Messages", subtitle: t("appSub.messages"), icon: MessageCircle, iconImg: asset("images/messages-icon.webp"), pinned: true },
+  { id: "verai", title: "VER-AI", subtitle: t("appSub.verai"), icon: Sparkles, iconImg: asset("images/ver-ai.ico"), pinned: true },
+  { id: "vertube", title: "VER-TUBE", subtitle: "watch any video, no account", icon: Play, iconImg: "https://www.youtube.com/s/desktop/af0a3c1e/img/favicon_144x144.png", pinned: true },
   { id: "settings", title: "Config", subtitle: t("appSub.settings"), icon: Settings2, iconImg: asset("images/config-icon.png"), pinned: true },
   { id: "games", title: "PS5 Emu", subtitle: t("appSub.games"), icon: Gamepad2, iconImg: asset("images/ps5-emu.png") },
   { id: "minecraft", title: "Minecraft Launcher", subtitle: t("appSub.minecraft"), icon: Gamepad2, iconImg: MC_ICON },
@@ -229,11 +392,25 @@ const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; icon
   { id: "calculator", title: "Calculator", subtitle: t("appSub.calculator"), icon: Calculator, iconImg: asset("images/calculator-logo.svg") },
   { id: "rainmeter", title: "Rainmeter", subtitle: t("appSub.rainmeter"), icon: MonitorCog, iconImg: RAINMETER_ICON },
   { id: "terminal", title: "Terminal", subtitle: t("appSub.terminal"), icon: Terminal, iconImg: "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/51/Windows_Terminal_logo.svg/960px-Windows_Terminal_logo.svg.png", pinned: true },
+  { id: "links", title: "LazyList", subtitle: "the full proxy list", icon: Link2, iconImg: asset("images/links.svg"), pinned: true },
 ];
 
 type AppOverride = { name?: string; showName?: boolean; iconUrl?: string; pinned?: boolean };
 
+const APP_SECTIONS: { id: string; tone: string; all?: boolean; ids: AppId[] }[] = [
+  { id: "all", tone: "tone-all", all: true, ids: [] },
+  { id: "watch", tone: "tone-watch", ids: ["vertube", "spicetify", "messages", "verai"] },
+  { id: "play", tone: "tone-play", ids: ["roblox", "minecraft", "games", "pizza"] },
+  { id: "create", tone: "tone-create", ids: ["terminal", "wallpaper-engine", "browser", "calculator", "hub", "settings", "translucenttb", "rainmeter", "ghostview", "links"] },
+];
+
+const GV_APP: { id: AppId; title: string; subtitle: string; icon: LucideIcon; pinned: boolean; showName: boolean } = { id: "ghostview", title: "GhostView", subtitle: "remote view", icon: Eye, pinned: false, showName: false };
+
 function getApp(id: AppId, overrides: Record<string, AppOverride>) {
+  if (id === "ghostview") {
+    const gvOv = overrides.ghostview ?? {};
+    return { ...GV_APP, title: gvOv.name ?? GV_APP.title, showName: gvOv.showName ?? false };
+  }
   const base = apps.find((app) => app.id === id) ?? apps[0];
   const ov = overrides[id] ?? {};
   return { ...base, title: ov.name ?? base.title, showName: ov.showName ?? false, iconUrl: ov.iconUrl };
@@ -257,6 +434,9 @@ const storage = {
 };
 
 let clickSfxCtx: AudioContext | null = null;
+let msFeedBridge: ((line: string) => void) | null = null;
+let ghostWinCloser: (() => void) | null = null;
+function pushMsFeed(line: string) { msFeedBridge?.(line); }
 function playClick() {
   try {
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -441,6 +621,14 @@ function RainmeterClock({ cfg, date, tone, color }: { cfg: RainmeterSettings; da
   const rootStyle = { color: color ?? cfg.color, "--rm-accent": cfg.accent, "--rm-z": rmZ } as CSSProperties;
   const scaleStyle = { transform: `scale(${cfg.scale})` } as CSSProperties;
   const cls = `rm-clock rm-clock--${tone} rm-${cfg.skin}`;
+  if (cfg.skin === "bigsur") {
+    const bigSurDate = date.toLocaleDateString(localeOf(LANG), { weekday: "long", month: "long", day: "numeric" });
+    return <div className={cls} style={rootStyle}><div className="rm-scale" style={scaleStyle}>
+      <span className="rm-big-sur-date">{bigSurDate}</span>
+      <strong className="rm-big-sur-time">{time}</strong>
+      <span className="rm-big-sur-caption">{t("rm.day." + dayPartOf(date))}</span>
+    </div></div>;
+  }
   if (cfg.skin === "summit") {
     return <div className={cls} style={rootStyle}><div className="rm-scale" style={scaleStyle}>
       <span className="rm-summit-line" />
@@ -473,7 +661,7 @@ function RainmeterClock({ cfg, date, tone, color }: { cfg: RainmeterSettings; da
   </div></div>;
 }
 
-function RainmeterWidget({ cfg, date, tone, wallpaper }: { cfg: RainmeterSettings; date: Date; tone: "lock" | "home"; wallpaper?: PickerWallpaper }) {
+function RainmeterWidget({ cfg, date, tone, wallpaper, onAlternative }: { cfg: RainmeterSettings; date: Date; tone: "lock" | "home"; wallpaper?: PickerWallpaper; onAlternative?: () => void }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -576,6 +764,7 @@ function RainmeterWidget({ cfg, date, tone, wallpaper }: { cfg: RainmeterSetting
           <span className={`rm-menu-check ${cfg.draggable ? "on" : ""}`}>{cfg.draggable ? <Check size={12} strokeWidth={3} /> : null}</span>
           Draggable
         </button>
+        {onAlternative ? <button className="rm-menu-row" onClick={() => { setMenu(null); onAlternative(); }}><SlidersHorizontal size={14} /> Alternative</button> : null}
         <div className="rm-menu-sep" />
         <button className="rm-menu-row rm-menu-danger" onClick={() => commit({ showClock: false })}>Unload skin</button>
       </div>
@@ -592,6 +781,8 @@ type CinefyTrack = {
   previewUrl: string;
   trackViewUrl: string;
   primaryGenreName: string;
+  fullUrl?: string;
+  color?: string;
 };
 
 type MarketCategory = "extensions" | "themes" | "snippets";
@@ -602,6 +793,33 @@ type SpicetifyTab = "home" | "search" | "liked" | "playlist" | "marketplace" | "
 type Playlist = { id: number; name: string; trackIds: number[] };
 type TrackCache = Record<number, CinefyTrack>;
 type LyricLine = { time: number; text: string };
+
+const FULL_LIBRARY: CinefyTrack[] = [
+  { trackId: -1, trackName: "Starboy", artistName: "The Weeknd", collectionName: "Full Length", artworkUrl100: "https://archive.org/download/starboy_202407/Starboy.png", previewUrl: "", trackViewUrl: "https://archive.org/details/starboy_202407", primaryGenreName: "R&B", fullUrl: "https://archive.org/download/starboy_202407/Starboy.mp3", color: "linear-gradient(135deg,#c0392b,#6b1d12)" },
+  { trackId: -2, trackName: "Afterglow", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-afterglow/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Electronic", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", color: "linear-gradient(135deg,#1db954,#0b6e38)" },
+  { trackId: -3, trackName: "Neon Drift", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-neon/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Electronic", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", color: "linear-gradient(135deg,#0b84ff,#051f4d)" },
+  { trackId: -4, trackName: "Midnight Loop", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-midnight/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Electronic", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", color: "linear-gradient(135deg,#8b5cf6,#2e1065)" },
+  { trackId: -5, trackName: "Golden Hour", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-golden/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Downtempo", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", color: "linear-gradient(135deg,#f59e0b,#7c3a00)" },
+  { trackId: -6, trackName: "Liquid Sky", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-liquid/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Electronic", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3", color: "linear-gradient(135deg,#06b6d4,#083344)" },
+  { trackId: -7, trackName: "Static Bloom", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-static/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Electronic", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3", color: "linear-gradient(135deg,#ec4899,#500724)" },
+  { trackId: -8, trackName: "Paper Planes", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-paper/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Midtempo", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3", color: "linear-gradient(135deg,#22c55e,#14532d)" },
+  { trackId: -9, trackName: "Glass Avenue", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-glass/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Electronic", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3", color: "linear-gradient(135deg,#a3a3f6,#312e81)" },
+  { trackId: -10, trackName: "Monkeys Spinning Monkeys", artistName: "Kevin MacLeod", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-monkeys/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Library", fullUrl: "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Monkeys%20Spinning%20Monkeys.mp3", color: "linear-gradient(135deg,#f97316,#7c2d12)" },
+  { trackId: -11, trackName: "Fluffing a Duck", artistName: "Kevin MacLeod", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-duck/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Library", fullUrl: "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Fluffing%20a%20Duck.mp3", color: "linear-gradient(135deg,#14b8a6,#134e4a)" },
+  { trackId: -12, trackName: "Fast Talkin", artistName: "Kevin MacLeod", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-fasttalk/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Library", fullUrl: "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Fast%20Talkin.mp3", color: "linear-gradient(135deg,#ef4444,#450a0a)" },
+  { trackId: -13, trackName: "Solaris", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-solaris/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Electronic", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3", color: "linear-gradient(135deg,#eab308,#3f2d04)" },
+  { trackId: -14, trackName: "Aurora", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-aurora/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Electronic", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3", color: "linear-gradient(135deg,#6366f1,#1e1b4b)" },
+  { trackId: -15, trackName: "Cobalt Drift", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-cobalt/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Tech House", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3", color: "linear-gradient(135deg,#3b82f6,#1e3a8a)" },
+  { trackId: -16, trackName: "Solar Flare", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-solar/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Electronic", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3", color: "linear-gradient(135deg,#f97316,#7c2d12)" },
+  { trackId: -17, trackName: "Pulse Line", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-pulse/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Synthwave", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3", color: "linear-gradient(135deg,#d946ef,#701a75)" },
+  { trackId: -18, trackName: "Canyon Echo", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-canyon/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Downtempo", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3", color: "linear-gradient(135deg,#84cc16,#365314)" },
+  { trackId: -19, trackName: "Prism Walk", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-prism/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Electronica", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3", color: "linear-gradient(135deg,#f43f5e,#881337)" },
+  { trackId: -20, trackName: "Night Circuit", artistName: "SoundHelix", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-night/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Synthpop", fullUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3", color: "linear-gradient(135deg,#0ea5e9,#0c4a6e)" },
+  { trackId: -21, trackName: "Carefree", artistName: "Kevin MacLeod", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-carefree/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Library", fullUrl: "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Carefree.mp3", color: "linear-gradient(135deg,#10b981,#065f46)" },
+  { trackId: -22, trackName: "Investigations", artistName: "Kevin MacLeod", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-invest/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Library", fullUrl: "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Investigations.mp3", color: "linear-gradient(135deg,#64748b,#1e293b)" },
+  { trackId: -23, trackName: "Firebrand", artistName: "Kevin MacLeod", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-firebrand/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Library", fullUrl: "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Firebrand.mp3", color: "linear-gradient(135deg,#dc2626,#450a0a)" },
+  { trackId: -24, trackName: "Killers", artistName: "Kevin MacLeod", collectionName: "Full Length", artworkUrl100: "https://picsum.photos/seed/vertex-killers/600/600", previewUrl: "", trackViewUrl: "", primaryGenreName: "Library", fullUrl: "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Killers.mp3", color: "linear-gradient(135deg,#7c3aed,#2e1065)" },
+];
 
 function parseLrc(text: string): LyricLine[] {
   const lines: LyricLine[] = [];
@@ -767,6 +985,16 @@ function BrandMark() {
   return <span className="brand-mark"><span className="brand-glyph"><span /></span><span>Vertex Systems</span></span>;
 }
 
+function AvatarGlyph({ value, name, size = 34 }: { value?: string; name: string; size?: number }) {
+  if (value) {
+    if (value.startsWith("preset:")) {
+      return <span style={{ fontSize: Math.round(size * 0.5), lineHeight: 1 }}>{value.slice(7)}</span>;
+    }
+    return <img className="account-avatar-img" src={value} alt="" style={{ width: size, height: size }} />;
+  }
+  return <span style={{ fontSize: Math.round(size * 0.44) }}>{name.slice(0, 1).toUpperCase()}</span>;
+}
+
 function AppIcon({ app, size = 21 }: { app: { icon: LucideIcon; iconImg?: string; iconUrl?: string }; size?: number }) {
   if (app.iconUrl) return <img className="app-icon-img" src={app.iconUrl} alt="" style={{ width: size, height: size }} />;
   if (app.iconImg) return <img className="app-icon-img" src={app.iconImg} alt="" style={{ width: size, height: size }} />;
@@ -775,12 +1003,36 @@ function AppIcon({ app, size = 21 }: { app: { icon: LucideIcon; iconImg?: string
 }
 
 function App() {
-  const [phase, setPhase] = useState<"boot" | "lock" | "signin" | "desktop">("boot");
-  const [booting, setBooting] = useState(false);
+  const [phase, setPhase] = useState<"boot" | "profile" | "lock" | "picker" | "signin" | "desktop">("boot");
+  const [bootVideo, setBootVideo] = useState(false);
+  const [accounts, setAccounts] = useState<VertexAccount[]>(() => readAccounts());
+  const [activeAccount, setActiveAccount] = useState<VertexAccount | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<VertexAccount | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [profilePass, setProfilePass] = useState("");
+  const [profilePass2, setProfilePass2] = useState("");
+  const [profileAvatar, setProfileAvatar] = useState("");
+  const [profileErr, setProfileErr] = useState("");
+  const [profileAskPass, setProfileAskPass] = useState(false);
+  const [loginName, setLoginName] = useState("");
+  const [loginPass, setLoginPass] = useState("");
+  const [loginErr, setLoginErr] = useState("");
+  const [gvInbox, setGvInbox] = useState<GvIncoming[]>([]);
+  const gvPrevSnap = useRef<GvSnap | null>(null);
+  const gvFrameAt = useRef(0);
+  const gvStartedRef = useRef<string | null>(null);
+  const [gvEngineReady, setGvEngineReady] = useState(false);
+  
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState(false);
   const [mobileWarning, setMobileWarning] = useState(() => window.innerWidth < 760);
   const [now, setNow] = useState(() => new Date());
+  const [dockViewport, setDockViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  useEffect(() => {
+    const resize = () => setDockViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
   const rmCfg = readRainmeterConfig();
   const [, setRmTick] = useState(0);
   useEffect(() => {
@@ -792,8 +1044,10 @@ function App() {
   const [languageOpen, setLanguageOpen] = useState(() => !storage.read("vertex-language-set", false));
   const homeVideoRef = useRef<HTMLVideoElement>(null);
   const lockVideoRef = useRef<HTMLVideoElement>(null);
-  const [wallpaper, setWallpaper] = useState<WallpaperId>(() => storage.read("vertex-wallpaper-v2", "singularity"));
-  const [lockWallpaper, setLockWallpaper] = useState<WallpaperId>(() => storage.read("vertex-lock-wallpaper-v2", "singularity"));
+  const bootVideoRef = useRef<HTMLVideoElement>(null);
+  const bootEnters = useRef(0);
+  const [wallpaper, setWallpaper] = useState<WallpaperId>(() => storage.read("vertex-wallpaper-v2", SEASON_WALLPAPER));
+  const [lockWallpaper, setLockWallpaper] = useState<WallpaperId>(() => storage.read("vertex-lock-wallpaper-v2", SEASON_WALLPAPER));
   const [iconSize, setIconSize] = useState<"small" | "medium" | "large">(() => storage.read("vertex-icon-size", "medium"));
   const [showDesktopIcons, setShowDesktopIcons] = useState(() => storage.read("vertex-show-icons", false));
   const [customCursor, setCustomCursor] = useState(() => storage.read("vertex-custom-cursor", false));
@@ -806,18 +1060,49 @@ function App() {
   const [wppInstalled, setWppInstalled] = useState<boolean>(() => storage.read("vertex-wpp-installed", false));
   const [startOpen, setStartOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [dockOverflowOpen, setDockOverflowOpen] = useState(false);
   const [drawerQuery, setDrawerQuery] = useState("");
+  const [drawerSection, setDrawerSection] = useState<string>("all");
   const [startQuery, setStartQuery] = useState("");
   const [previewId, setPreviewId] = useState<AppId | null>(null);
   const [previewPos, setPreviewPos] = useState<{ left: number; top: number } | null>(null);
   const previewCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [taskbarPos, setTaskbarPos] = useState<TaskbarPos>(() => {
+    const saved = storage.read<string>("vertex-taskbar-position", "bottom");
+    return saved === "top" || saved === "left" || saved === "right" || saved === "bottom" ? saved : "bottom";
+  });
+  const moveTaskbar = (pos: TaskbarPos) => {
+    setTaskbarPos(pos);
+    storage.write("vertex-taskbar-position", pos);
+    if (previewCloseTimer.current) { clearTimeout(previewCloseTimer.current); previewCloseTimer.current = null; }
+    setPreviewId(null);
+    setPreviewPos(null);
+    setDockMenu(null);
+  };
 
   const openTaskPreview = (event: ReactMouseEvent<HTMLButtonElement>, appId: AppId) => {
     if (previewCloseTimer.current) { clearTimeout(previewCloseTimer.current); previewCloseTimer.current = null; }
     const rect = event.currentTarget.getBoundingClientRect();
     const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
-    const left = Math.max(12, Math.min(rect.left + rect.width / 2 - 162, vw - 340));
-    setPreviewPos({ left, top: Math.max(10, rect.top - 234) });
+    const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+    const cw = 324;
+    const ch = 234;
+    let left: number;
+    let top: number;
+    if (taskbarPos === "top") {
+      left = Math.max(12, Math.min(rect.left + rect.width / 2 - cw / 2, vw - cw - 12));
+      top = Math.max(8, rect.bottom + 12);
+    } else if (taskbarPos === "left") {
+      left = Math.max(8, rect.right + 12);
+      top = Math.max(12, Math.min(rect.top + rect.height / 2 - ch / 2, vh - ch - 12));
+    } else if (taskbarPos === "right") {
+      left = Math.min(vw - cw - 8, Math.max(12, rect.left - cw - 12));
+      top = Math.max(12, Math.min(rect.top + rect.height / 2 - ch / 2, vh - ch - 12));
+    } else {
+      left = Math.max(12, Math.min(rect.left + rect.width / 2 - cw / 2, vw - cw - 12));
+      top = Math.max(10, rect.top - ch - 12);
+    }
+    setPreviewPos({ left, top });
     setPreviewId(appId);
   };
   const keepTaskPreview = () => {
@@ -835,6 +1120,29 @@ function App() {
     setPreviewId(null);
     setPreviewPos(null);
   };
+  const [dockMenu, setDockMenu] = useState<{ x: number; y: number } | null>(null);
+  const openDockMenu = (event: ReactMouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu(null); setAppMenu(null); setWidgetMenu(null);
+    if (previewCloseTimer.current) { clearTimeout(previewCloseTimer.current); previewCloseTimer.current = null; }
+    setPreviewId(null);
+    setPreviewPos(null);
+    const rect = event.currentTarget.getBoundingClientRect();
+    const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+    const MENU_W = 218;
+    const MENU_H = 208;
+    let left = event.clientX;
+    let top = event.clientY;
+    if (taskbarPos === "bottom") { left = event.clientX; top = rect.top - MENU_H - 10; }
+    else if (taskbarPos === "top") { left = event.clientX; top = rect.bottom + 10; }
+    else if (taskbarPos === "left") { left = rect.right + 10; top = event.clientY; }
+    else { left = rect.left - MENU_W - 10; top = event.clientY; }
+    left = Math.max(8, Math.min(left, vw - MENU_W - 8));
+    top = Math.max(8, Math.min(top, vh - MENU_H - 8));
+    setDockMenu({ x: left, y: top });
+  };
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -843,7 +1151,54 @@ function App() {
     const valid = Array.isArray(saved) ? saved.filter((id) => apps.some((app) => app.id === id)) : [];
     return valid.length ? valid : apps.slice(0, 6).map((app) => app.id);
   });
+  const [ps5Shortcuts, setPs5Shortcuts] = useState<Ps5DesktopShortcut[]>(() => storage.read("vertex-ps5-desktop-shortcuts", []));
+  useEffect(() => {
+    const addShortcut = (event: Event) => {
+      const shortcut = (event as CustomEvent<Ps5DesktopShortcut>).detail;
+      if (!shortcut?.id || !shortcut.name || !shortcut.cover) return;
+      setShowDesktopIcons(true);
+      storage.write("vertex-show-icons", true);
+      setPs5Shortcuts((previous) => {
+        const next = [shortcut, ...previous.filter((item) => item.id !== shortcut.id)].slice(0, 48);
+        storage.write("vertex-ps5-desktop-shortcuts", next);
+        return next;
+      });
+    };
+    const removeShortcut = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      setPs5Shortcuts((previous) => {
+        if (!previous.some((item) => item.id === id)) return previous;
+        const next = previous.filter((item) => item.id !== id);
+        storage.write("vertex-ps5-desktop-shortcuts", next);
+        return next;
+      });
+    };
+    window.addEventListener("vertex-ps5-create-shortcut", addShortcut);
+    window.addEventListener("vertex-ps5-remove-shortcut", removeShortcut);
+    return () => {
+      window.removeEventListener("vertex-ps5-create-shortcut", addShortcut);
+      window.removeEventListener("vertex-ps5-remove-shortcut", removeShortcut);
+    };
+  }, []);
   const [appOverrides, setAppOverrides] = useState<Record<string, AppOverride>>(() => storage.read("vertex-app-overrides", {}));
+  const setFsocietyOverride = (active: boolean) => {
+    setAppOverrides((prev) => {
+      const current = prev.terminal ?? {};
+      let nextTerminal: AppOverride;
+      if (active) {
+        nextTerminal = { ...current, name: "Arch Linux", iconUrl: ARCH_ICON };
+      } else {
+        const { name: _name, iconUrl: _iconUrl, ...rest } = current;
+        nextTerminal = { ...rest };
+      }
+      const next: Record<string, AppOverride> = { ...prev };
+      if (Object.keys(nextTerminal).length) next.terminal = nextTerminal;
+      else delete next.terminal;
+      storage.write("vertex-app-overrides", next);
+      return next;
+    });
+  };
   const [appMenu, setAppMenu] = useState<{ appId: AppId; x: number; y: number } | null>(null);
   const [appMenuMode, setAppMenuMode] = useState<"default" | "icon">("default");
   const [appMenuPos, setAppMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -852,9 +1207,27 @@ function App() {
   const [widgetMenuPos, setWidgetMenuPos] = useState<{ x: number; y: number } | null>(null);
   const widgetMenuRef = useRef<HTMLDivElement>(null);
   const [widgetHidden, setWidgetHidden] = useState<string[]>(() => storage.read<string[]>("vertex-widget-hidden", []));
+  const [widgetLocked, setWidgetLocked] = useState<string[]>(() => storage.read<string[]>("vertex-widget-locked", []));
+  const [widgetPositions, setWidgetPositions] = useState<Record<string, WidgetPosition>>(() => storage.read<Record<string, WidgetPosition>>("vertex-widget-layout-v2", {}));
+  const [alternativeOpen, setAlternativeOpen] = useState(false);
+  const [widgetLabels, setWidgetLabels] = useState(() => storage.read("vertex-widget-labels", true));
+  const [widgetScale, setWidgetScale] = useState(() => storage.read<number>("vertex-widget-scale", 1));
+  const [widgetSide, setWidgetSide] = useState<"left" | "right">(() => storage.read("vertex-widget-side", "right"));
+  const [weatherLocation, setWeatherLocation] = useState(() => storage.read("vertex-weather-city", ""));
+  const [widgetAccent, setWidgetAccent] = useState(() => storage.read("vertex-widget-accent", "#57c8ff"));
   useEffect(() => { storage.write("vertex-widget-hidden", widgetHidden); }, [widgetHidden]);
+  useEffect(() => { storage.write("vertex-widget-locked", widgetLocked); }, [widgetLocked]);
+  useEffect(() => { storage.write("vertex-widget-layout-v2", widgetPositions); }, [widgetPositions]);
+  useEffect(() => { storage.write("vertex-widget-labels", widgetLabels); }, [widgetLabels]);
+  useEffect(() => { storage.write("vertex-widget-scale", widgetScale); }, [widgetScale]);
+  useEffect(() => { storage.write("vertex-widget-side", widgetSide); }, [widgetSide]);
+  useEffect(() => { storage.write("vertex-weather-city", weatherLocation); }, [weatherLocation]);
+  useEffect(() => { storage.write("vertex-widget-accent", widgetAccent); }, [widgetAccent]);
   const toggleWidget = (id: string) => setWidgetHidden((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggleWidgetLock = (id: string) => setWidgetLocked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const saveWidgetPosition = (id: string, position: WidgetPosition) => setWidgetPositions((previous) => ({ ...previous, [id]: position }));
   const isWidgetHidden = (id: string) => widgetHidden.includes(id);
+  const hasSidebarWidgets = ["deck", "media", "updates", "calendar", "weather", "resources", "switches"].some((id) => !isWidgetHidden(id));
 
   useLayoutEffect(() => {
     if (!contextMenu) { setContextMenuPos(null); return; }
@@ -884,11 +1257,169 @@ function App() {
   const [translucentTB, setTranslucentTB] = useState<boolean>(() => storage.read("vertex-translucenttb", false) !== false);
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [activeWindow, setActiveWindow] = useState<AppId | null>(null);
+  const gvWindowsRef = useRef<WindowState[]>([]);
+  gvWindowsRef.current = windows;
   const [settings, setSettings] = useState<SystemSettings>(() => {
     const loaded = { ...defaultSettings, ...storage.read<Partial<SystemSettings>>("vertex-settings", {}) };
     if (loaded.cloak === "canvas") loaded.cloak = "none";
     return loaded;
   });
+
+  const resolveWallpaperImage = useCallback((id: string): string | null => {
+    return wallImg(id);
+  }, []);
+
+  const buildGvSnap = useCallback((): GvSnap | null => {
+    const acc = (() => { try { return JSON.parse(localStorage.getItem("vertex-ps5-account") ?? "null") as { username?: string } | null; } catch { return null; } })();
+    const activeWp = [...wallpapers, ...customWallpapers].find((x) => x.id === wallpaper);
+    let term: GvSnap["term"] = null;
+    if (activeWindow === "terminal") {
+      const el = document.querySelector<HTMLDivElement>(".term-output");
+      if (el) {
+        const text = (el.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
+        const prompt = document.querySelector<HTMLElement>(".term-entry .term-prompt")?.textContent ?? "vertex@vertex-os:~$";
+        term = { prompt, lines: text.split("\n") };
+      }
+    }
+    const activeHtml = document.querySelector(".desktop-shell.active") ?? document.querySelector(".desktop-shell");
+    const html = activeHtml ? captureScreenHtml(".desktop-shell") : null;
+    return {
+      v: 1,
+      t: Date.now(),
+      user: acc?.username ?? (gvEngineReady ? "guest" : "?") ,
+      wallpaper,
+      wallpaperName: activeWp?.name ?? wallpaper,
+      vpW: window.innerWidth,
+      vpH: window.innerHeight,
+      active: activeWindow,
+      wins: windows.map((w) => ({ id: w.id, title: getApp(w.id, appOverrides).title, x: w.rect.x, y: w.rect.y, w: w.rect.w, h: w.rect.h, minimized: w.minimized, focused: activeWindow === w.id })),
+      term,
+      html: html ?? undefined,
+      eh: html ? snapSig(html) : undefined,
+    };
+  }, [wallpaper, windows, activeWindow, appOverrides, customWallpapers, gvEngineReady, wallEngineEntries]);
+
+  useEffect(() => { ghostSetSnapGetter(() => buildGvSnap()); }, [buildGvSnap]);
+
+  useEffect(() => {
+    // lazily (re)start the GhostView engine whenever a session account appears
+    const iv = window.setInterval(() => {
+      const acc = (() => { try { return JSON.parse(localStorage.getItem("vertex-ps5-account") ?? "null") as { username?: string } | null; } catch { return null; } })();
+      const code = acc?.username ?? null;
+      if (!code) { gvStartedRef.current = null; return; }
+      if (gvStartedRef.current === code) return;
+      gvStartedRef.current = code;
+      setGvEngineReady(true);
+      ghostWinCloser = () => {
+        setWindows((prev) => prev.filter((w) => w.id !== "ghostview"));
+        setActiveWindow((prev) => (prev === "ghostview" ? null : prev));
+      };
+      startGhostView(code, {
+        onStatus: (msg) => pushMsFeed(msg),
+        onPayload: (item) => {
+          setGvInbox((prev) => prev.some((x) => x.token === item.token) ? prev : [...prev, item]);
+          addToast("Incoming download", `${item.file} · from ${item.from}`);
+        },
+        onSessionOpen: (peerCode, token) => {
+          window.setTimeout(() => {
+            setStartOpen(false); setDrawerOpen(false);
+            setWindows((prev) => prev.some((x) => x.id === "ghostview") ? prev : [...prev, { id: "ghostview", minimized: false, maximized: false, rect: defaultWindowRect(prev.length), prevRect: null }]);
+            setActiveWindow("ghostview");
+          }, 180);
+        },
+        onSessionSnap: (_peer, snap, latency) => {
+          const prev = gvPrevSnap.current;
+          const ev = (line: string) => pushMsFeed(line);
+          if (!prev) {
+            ev(`[+] session sync · ${snap.user}@vertex-os`);
+            ev(`[+] wallpaper topology → “${snap.wallpaperName}”`);
+            if (snap.active) ev(`[>] focusing ${getApp(snap.active as AppId, appOverrides).title}`);
+          } else {
+            if (prev.wallpaper !== snap.wallpaper) ev(`[>] wallpaper → “${snap.wallpaperName}”`);
+            if (prev.active !== snap.active && snap.active) ev(`[>] focusing ${getApp(snap.active as AppId, appOverrides).title}`);
+            const opened = snap.wins.filter((n) => !prev.wins.some((o) => o.id === n.id));
+            const closed = prev.wins.filter((o) => !snap.wins.some((n) => n.id === o.id));
+            opened.forEach((n) => ev(`[+] opened ${n.title}`));
+            closed.forEach((o) => ev(`[−] closed ${o.title}`));
+            if (prev.term && snap.term && snap.term.lines.length - prev.term.lines.length >= 1 && prev.term.lines.length > 0) {
+              ev(`[↕] terminal: ${snap.term.lines.length - prev.term.lines.length} new line(s)`);
+            }
+          }
+          if (Date.now() - gvFrameAt.current > 2800) { ev(`[·] frame ${latency}ms`); gvFrameAt.current = Date.now(); }
+          gvPrevSnap.current = snap;
+        },
+onSessionClose: (peerCode) => {
+        pushMsFeed(`SESSION ${peerCode} ENDED — stream closed`);
+        if (ghostUiStore().get().role === "attacker") ghostWinCloser?.();
+        ghostSetStatus("closed");
+      },
+      onControl: (ctrl) => {
+        if (ctrl.cmd === "open") {
+          const id = ctrl.app as AppId | undefined;
+          if (!id || id === "ghostview") return;
+          setStartOpen(false); setDrawerOpen(false);
+          if (id === "translucenttb") {
+            setTranslucentOpen(true);
+            setWindows((items) => items.filter((w) => w.id !== id));
+            setActiveWindow((a) => (a === id ? null : a));
+            return;
+          }
+          setWindows((items) => items.some((w) => w.id === id)
+            ? items.map((w) => (w.id === id ? { ...w, minimized: false } : w))
+            : [...items, { id, minimized: false, maximized: false, rect: defaultWindowRect(items.length), prevRect: null }]);
+          setActiveWindow(id);
+        } else if (ctrl.cmd === "close") {
+          const id = ctrl.app as AppId | undefined;
+          if (!id) return;
+          setWindows((items) => items.filter((w) => w.id !== id));
+          setActiveWindow((a) => (a === id ? null : a));
+        } else if (ctrl.cmd === "min") {
+          const id = ctrl.app as AppId | undefined;
+          if (!id) return;
+          setWindows((items) => items.map((w) => (w.id === id ? { ...w, minimized: true } : w)));
+          setActiveWindow((a) => (a === id ? null : a));
+        } else if (ctrl.cmd === "run") {
+          const text = ctrl.text ?? "";
+          if (!text) return;
+          const hasTerm = gvWindowsRef.current.some((w) => w.id === "terminal");
+          if (!hasTerm) {
+            setStartOpen(false); setDrawerOpen(false);
+            setWindows((items) => items.some((w) => w.id === "terminal")
+              ? items.map((w) => (w.id === "terminal" ? { ...w, minimized: false } : w))
+              : [...items, { id: "terminal", minimized: false, maximized: false, rect: defaultWindowRect(items.length), prevRect: null }]);
+            setActiveWindow("terminal");
+          }
+          window.setTimeout(() => {
+            ghostTypeCtrl(text);
+            ghostEnterCtrl();
+          }, 420);
+        } else if (ctrl.cmd === "click") {
+          const x = ctrl.x ?? 0;
+          const y = ctrl.y ?? 0;
+          const stack = document.elementsFromPoint(x, y);
+          let el: Element | null = stack.find((e) => e !== document.body && e !== document.documentElement && !(e as Element).closest?.(".language-gate")) ?? null;
+          if (!el) el = document.elementFromPoint(x, y);
+          if (el) {
+            const opts = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0 };
+            el.dispatchEvent(new PointerEvent("pointerdown", opts));
+            el.dispatchEvent(new MouseEvent("mousedown", opts));
+            el.dispatchEvent(new PointerEvent("pointerup", opts));
+            el.dispatchEvent(new MouseEvent("mouseup", opts));
+            el.dispatchEvent(new MouseEvent("click", opts));
+          }
+        } else if (ctrl.cmd === "type") {
+          ghostTypeCtrl(ctrl.text ?? "");
+          if (ctrl.enter) ghostEnterCtrl();
+        } else if (ctrl.cmd === "enter") {
+          ghostEnterCtrl();
+        } else if (ctrl.cmd === "key") {
+          ghostKeyCtrl(ctrl.key ?? "Backspace");
+        }
+      },
+      });
+    }, 1000);
+    return () => window.clearInterval(iv);
+  }, []);
 
   useEffect(() => {
     const cloak = settings.cloak === "custom"
@@ -899,16 +1430,19 @@ function App() {
     if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
     link.href = cloak.icon || "/favicon.svg";
   }, [settings.cloak, settings.cloakName, settings.cloakIcon]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = settings.colorMode === "light" ? "light" : "dark";
+    root.dataset.season = HALLOWEEN_ACTIVE ? "halloween" : "";
+    root.dataset.style = settings.systemStyle === "macos" ? "macos" : "";
+  }, [settings.colorMode, settings.systemStyle]);
   const [updateOpen, setUpdateOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
-  const [toasts, setToasts] = useState<{ id: number; title: string; copy: string }[]>([]);
-  const [mediaHidden, setMediaHidden] = useState(false);
-  const [mediaPlaying, setMediaPlaying] = useState(false);
+  const [toasts, setToasts] = useState<{ id: number; title: string; copy: string; href?: string }[]>([]);
+  const [notifications, setNotifications] = useState<{ id: number; title: string; copy: string; href?: string }[]>([]);
+  const [notifReadCut, setNotifReadCut] = useState(0);
   const [currentTrack, setCurrentTrack] = useState<{ name: string; artist: string; artwork: string } | null>(null);
-  const sysAudioRef = useRef<HTMLAudioElement>(null);
-  const [sysProgress, setSysProgress] = useState(0);
-  const [sysDuration, setSysDuration] = useState(0);
-  const SYSTEM_AUDIO_ART = "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/7c/04/bf/7c04bfc6-be8c-661a-3306-b97fc2c4999b/859705593825.jpg/600x600bb.jpg";
 
   const activeWallpaper = wallpapers.find((item) => item.id === wallpaper) ?? customWallpapers.find((item) => item.id === wallpaper) ?? wallpapers[0];
   const activeLockWallpaper = wallpapers.find((item) => item.id === lockWallpaper) ?? customWallpapers.find((item) => item.id === lockWallpaper) ?? wallpapers[1];
@@ -941,6 +1475,11 @@ function App() {
   }, [wppInstalled]);
   const filteredApps = useMemo(() => apps.filter((app) => getApp(app.id, appOverrides).title.toLowerCase().includes(drawerQuery.toLowerCase())), [drawerQuery, appOverrides, apps]);
   const pinnedApps = useMemo(() => apps.filter((app) => { const themed = getApp(app.id, appOverrides); return (appOverrides[app.id]?.pinned ?? app.pinned) && themed.title.toLowerCase().includes(startQuery.toLowerCase()); }), [startQuery, appOverrides, apps]);
+  const activeSection = useMemo(() => APP_SECTIONS.find((s) => s.id === drawerSection) ?? null, [drawerSection]);
+  const drawerApps = useMemo(() => {
+    if (!activeSection || activeSection.all) return filteredApps;
+    return filteredApps.filter((app) => activeSection.ids.includes(app.id));
+  }, [filteredApps, activeSection]);
 
   const desktopPlacements = useMemo(() => {
     const map: Record<string, number> = {};
@@ -981,15 +1520,19 @@ function App() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (phase === "boot" && event.key === "Enter") {
-        if (booting) return;
-        beginBoot();
+      if (phase === "boot" && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        if (!bootVideo) { startIntro(); return; }
+        bootEnters.current += 1;
+        window.setTimeout(() => { bootEnters.current = 0; }, 1200);
+        if (bootEnters.current >= 2) finishBoot();
+        return;
       }
       if (event.key === "Escape") {
         setContextMenu(null);
         setStartOpen(false);
         setDrawerOpen(false);
-        if (phase === "signin") { setPhase("lock"); setPinError(false); setPinInput(""); }
+        if (phase === "signin" || phase === "picker") { setPhase("lock"); setPinError(false); setPinInput(""); }
       }
       const target = event.target as HTMLElement | null;
       const isEditing = target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
@@ -1007,6 +1550,19 @@ function App() {
   });
 
   useEffect(() => {
+    if (phase !== "boot" || !settings.fastBoot) return;
+    const skip = window.setTimeout(() => finishBoot(), 150);
+    return () => window.clearTimeout(skip);
+  }, [phase, settings.fastBoot]);
+
+  useEffect(() => {
+    if (phase !== "boot" || !bootVideo) return;
+    const video = bootVideoRef.current;
+    if (!video || !video.paused) return;
+    void video.play().catch(() => undefined);
+  }, [phase, bootVideo]);
+
+  useEffect(() => {
     if (phase !== "desktop" || !settings.idleLock) return;
     let timer = 0;
     const reset = () => { window.clearTimeout(timer); timer = window.setTimeout(() => setPhase("lock"), 180000); };
@@ -1016,11 +1572,66 @@ function App() {
     return () => { window.clearTimeout(timer); window.removeEventListener("mousemove", reset); window.removeEventListener("keydown", reset); };
   }, [phase, settings.idleLock]);
 
-  function addToast(title: string, copy: string) {
+  function addToast(title: string, copy: string, href?: string) {
+    const id = Date.now() + Math.random();
+    setNotifications((items) => [{ id, title, copy, href }, ...items].slice(0, 12));
+  }
+
+  function toastPopup(title: string, copy: string, href?: string) {
     const id = Date.now();
-    setToasts((items) => [...items, { id, title, copy }]);
+    setToasts((items) => [...items, { id, title, copy, href }]);
     window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 5000);
   }
+
+  function dismissNotification(id: number) {
+    setNotifications((items) => items.filter((item) => item.id !== id));
+  }
+
+  function clearNotifications() {
+    setNotifications([]);
+  }
+
+  const unseenNotifications = Math.max(0, notifications.length - notifReadCut);
+  function markNotificationsRead() { setNotifReadCut(notifications.length); }
+
+  useEffect(() => {
+    syncPasswordMirror();
+  }, [activeAccount]);
+
+  useEffect(() => {
+    const onSetAccountPassword = (event: Event) => {
+      const pass = (event as CustomEvent<string>).detail ?? "";
+      if (!activeAccount) return;
+      const updated: VertexAccount = { ...activeAccount, pass };
+      persistAccounts(accounts.map((a) => (a.id === updated.id ? updated : a)));
+      setActiveAccount(updated);
+      syncPasswordMirror();
+    };
+    window.addEventListener("vertex-set-password", onSetAccountPassword);
+    return () => window.removeEventListener("vertex-set-password", onSetAccountPassword);
+  }, [activeAccount, accounts]);
+
+  useEffect(() => {
+    if (phase !== "desktop") return;
+    try {
+      const shown = Number(sessionStorage.getItem("vertex-lf-promos") || "0");
+      if (shown >= 3) return;
+      const draft: { title: string; copy: string }[] = [
+        { title: "Link Finder — Vertex OS", copy: "School site blocked? Find a link that isn't caught yet, for free." },
+        { title: "New: Link Finder", copy: "Map of what your filter blocks + fresh, unblocked portal links." },
+        { title: "Vertex OS · Beta Program", copy: "Unblocked games + BETA build — grab a link, no install." },
+      ];
+      const slots = [8000, 70000, 140000];
+      const timers = slots.map((delay, i) => window.setTimeout(() => {
+        if (shown >= 3) return;
+        if (i >= draft.length) return;
+        const item = draft[i];
+        toastPopup(item.title, item.copy, "https://link-finder.netlify.app/");
+        try { sessionStorage.setItem("vertex-lf-promos", String(Math.min(3, shown + i + 1))); } catch { /* noop */ }
+      }, delay));
+      return () => timers.forEach((id) => window.clearTimeout(id));
+    } catch { return undefined; }
+  }, [phase]);
 
   function chooseLanguage(next: Lang) {
     saveLang(next);
@@ -1050,33 +1661,127 @@ function App() {
     return () => document.removeEventListener("pointerdown", handler);
   }, [pressFx]);
 
-  function beginBoot() {
-    if (phase !== "boot" || booting) return;
-    if (settings.fastBoot) { setPhase("lock"); return; }
-    setBooting(true);
-    window.setTimeout(() => { setBooting(false); setPhase("lock"); }, 1350);
+  function startIntro() {
+    if (phase !== "boot" || bootVideo) return;
+    if (settings.fastBoot) { finishBoot(); return; }
+    const video = bootVideoRef.current;
+    if (video) {
+      video.currentTime = 0;
+      video.muted = false;
+      void video.play().catch(() => { video.muted = true; void video.play().catch(() => undefined); });
+    }
+    setBootVideo(true);
+  }
+
+  function finishBoot() {
+    if (phase !== "boot") return;
+    setBootVideo(false);
+    const video = bootVideoRef.current;
+    if (video) { video.pause(); video.currentTime = 0; }
+    const first = accounts.length === 0;
+    setPhase(first ? "profile" : "lock");
+    if (!first) { setSelectedAccount(null); setPinInput(""); setPinError(false); }
+  }
+
+  function syncPasswordMirror() {
+    try { storage.write(PASSWORD_KEY, activeAccount?.pass ?? ""); } catch { /* ignore */ }
+  }
+
+  function showUpdateLogOnce() {
+    try {
+      if (sessionStorage.getItem("vertex-updlog-session")) return;
+      sessionStorage.setItem("vertex-updlog-session", "1");
+    } catch { /* keep quiet */ }
+    setUpdateOpen(true);
+  }
+
+  function enterDesktop() {
+    setPhase("desktop");
+    showUpdateLogOnce();
+    addToast(t("toast.welcomeTitle"), t("toast.welcomeCopy"));
+  }
+
+  function signInAs(account: VertexAccount) {
+    setActiveAccount(account);
+    enterDesktop();
+  }
+
+  function persistAccounts(next: VertexAccount[]) {
+    setAccounts(next);
+    storage.write(ACCOUNTS_KEY, JSON.stringify(next));
+  }
+
+  function createProfile() {
+    const name = profileName.trim();
+    if (!name) { setProfileErr(t("lock.needName")); return; }
+    if (profilePass !== profilePass2) { setProfileErr(t("lock.passMismatch")); return; }
+    const account: VertexAccount = { id: `a${Date.now().toString(36)}`, name, createdAt: Date.now(), pass: profilePass, avatar: profileAvatar || "" };
+    persistAccounts([...accounts, account]);
+    setPinInput("");
+    setPinError(false);
+    signInAs(account);
+  }
+
+  function updateActiveAvatar(avatar: string) {
+    if (!activeAccount) return;
+    const updated: VertexAccount = { ...activeAccount, avatar };
+    persistAccounts(accounts.map((a) => (a.id === updated.id ? updated : a)));
+    setActiveAccount(updated);
+  }
+
+  function updateActiveAccount(patch: { name?: string; email?: string }) {
+    if (!activeAccount) return;
+    const updated: VertexAccount = { ...activeAccount, ...patch };
+    persistAccounts(accounts.map((a) => (a.id === updated.id ? updated : a)));
+    setActiveAccount(updated);
   }
 
   function openSignIn() {
     if (phase !== "lock") return;
-    if (!storage.read<string>(PASSWORD_KEY, "")) {
-      setPhase("desktop");
-      addToast(t("toast.welcomeTitle"), t("toast.welcomeCopy"));
-      return;
-    }
+    if (accounts.length === 0) { setProfileErr(""); setLoginErr(""); setPhase("profile"); return; }
+    setSelectedAccount(null);
     setPinInput("");
     setPinError(false);
+    setLoginName("");
+    setLoginPass("");
+    setLoginErr("");
+    setPhase("picker");
+  }
+
+  function pickAccount(account: VertexAccount) {
+    setSelectedAccount(account);
+    setPinInput("");
+    setPinError(false);
+    if (!account.pass) { signInAs(account); return; }
     setPhase("signin");
   }
 
+  function loginWithCredentials() {
+    const name = loginName.trim();
+    if (!name) { setLoginErr("Enter an account name."); return; }
+    const match = accounts.find((a) => a.name.toLowerCase() === name.toLowerCase());
+    if (!match) {
+      setLoginErr(`No account named "${name}" on this device.`);
+      return;
+    }
+    if (match.pass && match.pass !== loginPass) {
+      setLoginErr("Wrong password — try again.");
+      return;
+    }
+    setLoginErr("");
+    setPinInput("");
+    setPinError(false);
+    signInAs(match);
+  }
+
   function unlock() {
-    if (phase !== "lock" && phase !== "signin") return;
-    const saved = storage.read<string>(PASSWORD_KEY, "");
-    if (!saved || pinInput === saved) {
-      setPhase("desktop");
+    if (phase !== "signin") return;
+    const account = selectedAccount ?? accounts[0];
+    if (!account) return;
+    if (!account.pass || pinInput === account.pass) {
       setPinError(false);
       setPinInput("");
-      addToast(t("toast.welcomeTitle"), t("toast.welcomeCopy"));
+      signInAs(account);
     } else {
       setPinError(true);
       setPinInput("");
@@ -1084,12 +1789,13 @@ function App() {
   }
 
   function resetPassword() {
-    if (phase !== "signin") return;
+    if (phase !== "signin" || !selectedAccount) return;
     if (!window.confirm(t("lock.forgotConfirm"))) return;
-    storage.remove(PASSWORD_KEY);
+    const cleared: VertexAccount = { ...selectedAccount, pass: "" };
+    persistAccounts(accounts.map((a) => (a.id === cleared.id ? cleared : a)));
     setPinInput("");
     setPinError(false);
-    setPhase("desktop");
+    signInAs(cleared);
     addToast(t("lock.forgotDoneTitle"), t("lock.forgotDoneCopy"));
   }
 
@@ -1115,6 +1821,23 @@ function App() {
     }
   }
 
+  function saveRainmeterPatch(patch: Partial<RainmeterSettings>) {
+    const next = { ...readRainmeterConfig(), ...patch };
+    storage.write("rainmeter-config", next);
+    window.dispatchEvent(new CustomEvent("rainmeter-config-updated"));
+  }
+
+  function applyAlternativeStyle(style: SystemStyle) {
+    if (settings.systemStyle === style) return;
+    updateSetting("systemStyle", style);
+    if (style === "macos") {
+      applyWallEngine("macos-default", "home");
+      applyWallEngine("macos-lock", "lock");
+    } else {
+      applyWallEngine(SEASON_WALLPAPER, "both");
+    }
+  }
+
   function applyWallEngine(id: WallpaperId, target: "both" | "home" | "lock") {
     if (target === "both" || target === "home") {
       setWallpaper(id);
@@ -1128,6 +1851,7 @@ function App() {
   }
 
   function toggleApp(id: AppId) {
+    if (id === "ghostview") return;
     setStartOpen(false);
     setDrawerOpen(false);
     if (id === "translucenttb") {
@@ -1136,6 +1860,7 @@ function App() {
       setTranslucentOpen(true);
       return;
     }
+    try { recordRecentApp(id, getApp(id, appOverrides).title); } catch { /* noop */ }
     const existing = windows.find((item) => item.id === id);
     if (!existing) {
       setWindows((items) => [...items, { id, minimized: false, maximized: false, rect: defaultWindowRect(items.length), prevRect: null }]);
@@ -1157,8 +1882,11 @@ function App() {
   }
 
   function closeWindow(id: AppId) {
-    setWindows((items) => items.filter((item) => item.id !== id));
-    setActiveWindow((active) => active === id ? null : active);
+    setWindows((items) => items.map((item) => item.id === id ? { ...item, closingAt: Date.now() } : item));
+    setTimeout(() => {
+      setWindows((items) => items.filter((item) => item.id !== id));
+      setActiveWindow((active) => active === id ? null : active);
+    }, 200);
   }
 
   function minimizeWindow(id: AppId) {
@@ -1267,45 +1995,236 @@ function App() {
     setWindows([]);
     setActiveWindow(null);
     setPhase("boot");
-    setBooting(false);
   }
 
+  const dockRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const dock = dockRef.current;
+    if (!dock) return;
+    const reduced = () => {
+      try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
+    };
+    let centers: { btn: HTMLElement; x: number; y: number }[] = [];
+    let vertical = false;
+    let stale = true;
+
+    const measure = () => {
+      vertical = dock.classList.contains("dock--left") || dock.classList.contains("dock--right");
+      centers = Array.from(dock.querySelectorAll<HTMLElement>(".dock-button")).map((btn) => {
+        const rect = btn.getBoundingClientRect();
+        return { btn, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      });
+      stale = false;
+    };
+    const apply = (clientX: number, clientY: number) => {
+      if (stale || dock.querySelectorAll(".dock-button").length !== centers.length) measure();
+      for (const item of centers) {
+        const dist = vertical ? Math.abs(clientY - item.y) : Math.abs(clientX - item.x);
+        const t = dist >= 108 ? 0 : Math.pow(1 - dist / 108, 1.6);
+        item.btn.style.setProperty("--dock-scale", (1 + 0.45 * t).toFixed(3));
+        item.btn.style.setProperty("--dock-lift", ((1 - t) * 8).toFixed(1) + "px");
+      }
+    };
+    const onMove = (event: PointerEvent) => {
+      if (reduced()) return;
+      dock.classList.add("magnify");
+      apply(event.clientX, event.clientY);
+    };
+    const onLeave = () => {
+      stale = true;
+      dock.classList.remove("magnify");
+      for (const item of centers) {
+        item.btn.style.removeProperty("--dock-scale");
+        item.btn.style.removeProperty("--dock-lift");
+      }
+    };
+    const mutations = new MutationObserver(() => { stale = true; });
+    mutations.observe(dock, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    dock.addEventListener("pointerenter", onLeave);
+    dock.addEventListener("pointermove", onMove);
+    dock.addEventListener("pointerleave", onLeave);
+    window.addEventListener("resize", onLeave);
+    return () => {
+      dock.removeEventListener("pointerenter", onLeave);
+      dock.removeEventListener("pointermove", onMove);
+      dock.removeEventListener("pointerleave", onLeave);
+      window.removeEventListener("resize", onLeave);
+      mutations.disconnect();
+      onLeave();
+    };
+  }, []);
+
+  const chromeHidden = windows.some((item) => item.maximized && !item.minimized);
+  const verticalDock = taskbarPos === "left" || taskbarPos === "right";
+  const dockMaxWidth = dockViewport.width <= 760 ? Math.max(160, dockViewport.width - 24) : Math.min(1180, dockViewport.width - 420);
+  const dockCapacity = verticalDock
+    ? Math.max(3, Math.floor((dockViewport.height - 250) / 52))
+    : Math.max(3, Math.floor((dockMaxWidth - 200) / 52));
+  const dockEntries = apps.filter((app) => isPinned(app.id) || windows.some((win) => win.id === app.id));
+  const dockOverflowed = dockEntries.length > dockCapacity;
+  const visibleDockEntries = dockEntries.slice(0, dockOverflowed ? dockCapacity - 1 : dockCapacity);
+
   return (
-    <main className={`os-root ${PERF.low ? "perf-low" : ""}`} onClick={() => { setContextMenu(null); setAppMenu(null); setWidgetMenu(null); }} onContextMenu={(event) => {
+        <main className={`os-root${PERF.low ? " perf-low" : ""}`} onClick={() => { setContextMenu(null); setAppMenu(null); setWidgetMenu(null); setDockMenu(null); setDockOverflowOpen(false); }} onContextMenu={(event) => {
       event.preventDefault();
-      if (phase === "desktop") { setAppMenu(null); setWidgetMenu(null); setContextMenu({ x: event.clientX, y: event.clientY }); }
+      if (phase === "desktop") { setAppMenu(null); setWidgetMenu(null); setDockMenu(null); setContextMenu({ x: event.clientX, y: event.clientY }); }
     }}>
       <div className="wallpaper-layer">
-        {activeWallpaper.image
-          ? <img className="wallpaper-image" src={activeWallpaper.image} alt={`${activeWallpaper.name} wallpaper`} />
-          : (phase === "boot" || phase === "desktop")
-            ? <video key={activeWallpaper.id} ref={homeVideoRef} className="wallpaper-video" src={bgSrc(activeWallpaper.video, activeWallpaper.videoLow)} preload="metadata" autoPlay muted loop playsInline aria-label={`${activeWallpaper.name} wallpaper`} />
-            : null}
+        {activeWallpaper.id === "vertex-studio"
+          ? <VertexStudioWallpaper className="wallpaper-scene" />
+          : activeWallpaper.id === "halloween"
+            ? <HalloweenWallpaper className="wallpaper-scene" />
+            : activeWallpaper.image
+            ? <img className="wallpaper-image" src={activeWallpaper.image} alt={`${activeWallpaper.name} wallpaper`} />
+            : (phase === "boot" || phase === "desktop")
+              ? <video key={activeWallpaper.id} ref={homeVideoRef} className="wallpaper-video" src={bgSrc(activeWallpaper.video, activeWallpaper.videoLow)} preload="metadata" autoPlay muted loop playsInline aria-label={`${activeWallpaper.name} wallpaper`} />
+              : null}
       </div>
 
       <section className={`boot-screen ${phase !== "boot" ? "hidden" : ""}`} aria-label="Vertex boot sequence">
-        <div className="boot-core">
-          <BrandMark />
-          <h1 className="boot-title">VERTEX-OS</h1>
-           <p className="boot-sub">{t("boot.bootSub")}</p>
-          <div className="boot-actions">
-            <button className="primary-button" data-testid="button-enter-vertex" onClick={(event) => { event.stopPropagation(); beginBoot(); }}>
-               {booting ? t("boot.initializing") : t("boot.enter")}
-            </button>
-             <span className="boot-hint">{booting ? t("boot.establishing") : t("boot.hint")}</span>
+        <video
+          ref={bootVideoRef}
+          className={`boot-video ${bootVideo ? "on" : ""}`}
+          src={BOOT_INTRO_SRC}
+          preload="auto"
+          playsInline
+          onEnded={() => finishBoot()}
+          onError={() => finishBoot()}
+        />
+        {!bootVideo && (
+          <div className="boot-core">
+            <BrandMark />
+            <h1 className="boot-title">VERTEX-OS</h1>
+            <p className="boot-sub">{t("boot.bootSub")}</p>
+            <div className="boot-actions">
+              <button className="primary-button" data-testid="button-enter-vertex" onClick={(event) => { event.stopPropagation(); startIntro(); }}>
+                {t("boot.enter")}
+              </button>
+              <span className="boot-hint">{t("boot.hint")}</span>
+            </div>
           </div>
-          {booting && <div className="boot-progress"><span /></div>}
+        )}
+      </section>
+
+      <section className={`profile-screen ${phase === "profile" ? "active" : ""}`} aria-label="Create Vertex profile">
+        {activeLockWallpaper.image
+          ? <img className="signin-bg" src={activeLockWallpaper.image} alt="" />
+          : phase === "profile"
+            ? <video className="signin-bg" src={bgSrc(activeLockWallpaper.video, activeLockWallpaper.videoLow)} preload="metadata" autoPlay muted loop playsInline aria-hidden="true" />
+            : null}
+        <div className="signin-card profile-card">
+          <div className="lock-avatar"><BrandMark /></div>
+          <div className="profile-kicker">Vertex-OS · v{VERTEX_VERSION}</div>
+          <h2 className="profile-title">Create your profile</h2>
+          <p className="profile-sub">Pick a name (and any anime avatar) and you&apos;re in.</p>
+          <div className="profile-avatar-row">
+            <span className={`profile-avatar-preview ${profileAvatar ? "has-img" : ""}`}>
+              {profileAvatar ? <AvatarGlyph value={profileAvatar} name={profileName} size={52} /> : <span className="profile-avatar-glyph">{profileName.trim().slice(0, 1).toUpperCase() || "?"}</span>}
+            </span>
+            <label className="profile-avatar-upload">
+              <Image size={14} /> Upload image or GIF
+              <input type="file" accept="image/*,.gif" onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                setProfileErr("");
+                void avatarFromFile(file).then(setProfileAvatar).catch((err: Error) => setProfileErr(err.message));
+              }} />
+            </label>
+          </div>
+          <div className="profile-avatar-label">Anime avatars</div>
+          <div className="profile-avatar-animes" aria-label="Anime avatars">
+            {PROFILE_ANIME_AVATARS.map((u) => (
+              <button key={u} type="button" className={`profile-avatar-anime ${profileAvatar === u ? "selected" : ""}`} onClick={() => setProfileAvatar(u)} aria-label="Anime avatar">
+                <img src={u} alt="" loading="lazy" />
+              </button>
+            ))}
+          </div>
+          <div className="profile-avatar-label">Emoji avatars</div>
+          <div className="profile-avatar-presets" aria-label="Preset avatars">
+            {PRESET_AVATARS.map((glyph) => (
+              <button key={glyph} type="button" className={`profile-avatar-preset ${profileAvatar === `preset:${glyph}` ? "selected" : ""}`} onClick={() => setProfileAvatar(`preset:${glyph}`)} aria-label={glyph}>{glyph}</button>
+            ))}
+          </div>
+          <form className="profile-fields" onSubmit={(event) => { event.preventDefault(); createProfile(); }}>
+            <label>
+              <span>Profile name</span>
+              <input autoFocus value={profileName} onChange={(event) => { setProfileName(event.target.value); setProfileErr(""); }} placeholder="Type any name…" autoComplete="off" data-testid="input-profile-name" />
+            </label>
+            <button type="button" className={`profile-pass-btn ${profileAskPass ? "on" : ""}`} onClick={() => setProfileAskPass((v) => !v)}>
+              <LockKeyhole size={13} /> {profileAskPass ? "Password on · tap to remove" : "Add a password (optional)"}
+            </button>
+            {profileAskPass && (
+              <>
+                <label>
+                  <span>Password</span>
+                  <input type="password" value={profilePass} onChange={(event) => { setProfilePass(event.target.value); setProfileErr(""); }} placeholder="Keep it secret" data-testid="input-profile-pass" />
+                </label>
+                <label>
+                  <span>Confirm password</span>
+                  <input type="password" value={profilePass2} onChange={(event) => { setProfilePass2(event.target.value); setProfileErr(""); }} placeholder="Repeat your password" data-testid="input-profile-pass2" />
+                </label>
+              </>
+            )}
+            {profileErr ? <span className="lock-error">{profileErr}</span> : null}
+            <button type="submit" className="profile-create">{profileAskPass ? "Create profile & sign in" : "Create & enter"}</button>
+          </form>
+          {accounts.length > 0 && <button className="signin-back" onClick={() => { setProfileErr(""); setPhase("picker"); }}>Back</button>}
+        </div>
+      </section>
+
+      <section className={`signin-screen ${phase === "picker" ? "active" : ""}`} aria-label="Pick an account" onClick={(event) => { if (event.target === event.currentTarget) setPhase("lock"); }}>
+        {activeLockWallpaper.image
+          ? <img className="signin-bg" src={activeLockWallpaper.image} alt="" />
+          : phase === "picker"
+            ? <video className="signin-bg" src={bgSrc(activeLockWallpaper.video, activeLockWallpaper.videoLow)} preload="metadata" autoPlay muted loop playsInline aria-hidden="true" />
+            : null}
+        <div className="signin-card account-card">
+          <div className="checker-card-title">Who&apos;s using this device?</div>
+          <div className="checker-grid">
+            {accounts.map((account) => (
+              <button key={account.id} className="checker-tile" onClick={() => pickAccount(account)} data-testid={`button-account-${account.name}`}>
+                <span className="checker-avatar"><AvatarGlyph value={account.avatar} name={account.name} size={64} /></span>
+                <span className="checker-name">{account.name}</span>
+              </button>
+            ))}
+            <button className="checker-tile checker-add" onClick={() => { setProfileName(""); setProfilePass(""); setProfilePass2(""); setProfileAvatar(""); setProfileAskPass(false); setProfileErr(""); setPhase("profile"); }} data-testid="button-add-account">
+              <span className="checker-avatar checker-add-avatar"><Plus size={30} /></span>
+              <span className="checker-name">Add profile</span>
+            </button>
+          </div>
+          <div className="account-divider">or log in with an account name</div>
+          <form className="account-login" onSubmit={(event) => { event.preventDefault(); loginWithCredentials(); }}>
+            <input value={loginName} onChange={(event) => { setLoginName(event.target.value); setLoginErr(""); }} placeholder="Account name" autoComplete="off" data-testid="input-login-name" />
+            <div className="account-login-row">
+              <input type="password" value={loginPass} onChange={(event) => { setLoginPass(event.target.value); setLoginErr(""); }} placeholder="Password" data-testid="input-login-pass" />
+              <button type="submit" aria-label="Log in"><ArrowRight size={15} /></button>
+            </div>
+            {loginErr ? <span className="lock-error">{loginErr}</span> : null}
+          </form>
+          <button className="account-add" onClick={() => { setProfileName(""); setProfilePass(""); setProfilePass2(""); setProfileAvatar(""); setProfileAskPass(false); setProfileErr(""); setPhase("profile"); }}><Plus size={15} /> Create new account</button>
+          <button className="signin-back" onClick={() => setPhase("lock")}>Back</button>
         </div>
       </section>
 
       <section className={`lock-screen ${phase === "lock" ? "active" : ""}`} onClick={openSignIn} aria-label="Vertex lock screen">
-         {activeLockWallpaper.image
-          ? <img className="lock-wallpaper" src={activeLockWallpaper.image} alt={`${activeLockWallpaper.name} lock wallpaper`} />
-          : phase === "lock"
-            ? <video key={activeLockWallpaper.id} ref={lockVideoRef} className="lock-wallpaper-video" src={bgSrc(activeLockWallpaper.video, activeLockWallpaper.videoLow)} preload="metadata" autoPlay muted loop playsInline aria-label={`${activeLockWallpaper.name} lock wallpaper`} />
-            : null}
+         {activeLockWallpaper.id === "vertex-studio"
+          ? <VertexStudioWallpaper className="lock-wallpaper-scene" />
+          : activeLockWallpaper.id === "halloween"
+            ? <HalloweenWallpaper className="lock-wallpaper-scene" />
+            : activeLockWallpaper.image
+            ? <img className="lock-wallpaper" src={activeLockWallpaper.image} alt={`${activeLockWallpaper.name} lock wallpaper`} />
+            : phase === "lock"
+              ? <video key={activeLockWallpaper.id} ref={lockVideoRef} className="lock-wallpaper-video" src={bgSrc(activeLockWallpaper.video, activeLockWallpaper.videoLow)} preload="metadata" autoPlay muted loop playsInline aria-label={`${activeLockWallpaper.name} lock wallpaper`} />
+              : null}
         {rmCfg.showClock && <RainmeterWidget cfg={rmCfg} date={now} tone="lock" wallpaper={activeLockWallpaper} />}
-         <div className="lock-fps">60 FPS</div>
+        <MusicWidgetLayer surface="lock" />
+        <LockAppsLayer
+          catalog={apps.map((app) => ({ id: app.id, title: app.title }))}
+          renderIcon={(appId) => <AppIcon app={getApp(appId as AppId, appOverrides)} size={26} />}
+          onLaunch={(appId) => { setPhase("desktop"); toggleApp(appId as AppId); }}
+        />
          <div className="lock-help">{t("lock.help")}</div>
       </section>
 
@@ -1316,44 +2235,85 @@ function App() {
             ? <video className="signin-bg" src={bgSrc(activeLockWallpaper.video, activeLockWallpaper.videoLow)} preload="metadata" autoPlay muted loop playsInline aria-hidden="true" />
             : null}
         <div className="signin-card">
-           <div className="lock-avatar"><BrandMark /></div>
-           <div className="lock-user">{t("set.passwordLabel")}</div>
+           <div className="lock-avatar lock-avatar-account">{selectedAccount ? <AvatarGlyph value={selectedAccount.avatar} name={selectedAccount.name} size={92} /> : <BrandMark />}</div>
+           <div className="lock-user">{selectedAccount?.name ?? t("set.passwordLabel")}</div>
+           <div className="lock-version">Vertex-OS · v{VERTEX_VERSION}</div>
           <form className="lock-pass-row" onSubmit={(event) => { event.preventDefault(); unlock(); }}>
             <input type="password" autoFocus value={pinInput} onChange={(event) => { setPinInput(event.target.value); setPinError(false); }} placeholder={t("lock.pass")} aria-label={t("lock.pass")} data-testid="input-vertex-password" />
             <button type="submit">{t("lock.signIn")}</button>
           </form>
            {pinError ? <span className="lock-error">{t("lock.tryAgain")}</span> : null}
            <button className="signin-back" onClick={resetPassword}>{t("lock.forgot")}</button>
-           <button className="signin-back" onClick={() => { setPinError(false); setPinInput(""); setPhase("lock"); }}>{t("lock.back")}</button>
+           <button className="signin-back" onClick={() => { setPinError(false); setPinInput(""); setPhase("picker"); }}>{t("lock.back")}</button>
         </div>
       </section>
 
-      <section className={`desktop-shell ${phase === "desktop" ? "active" : ""} ${iconSize === "large" ? "large-icons" : iconSize === "small" ? "icon-small" : ""} ${translucentTB ? "translucent-tb" : ""} ${customCursor ? "custom-cursor" : ""} ${pressFx ? "press-fx" : ""}`}>
-        {rmCfg.showClock && <RainmeterWidget cfg={rmCfg} date={now} tone="home" wallpaper={activeWallpaper} />}
+      <section className={`desktop-shell ${phase === "desktop" ? "active" : ""} ${iconSize === "large" ? "large-icons" : iconSize === "small" ? "icon-small" : ""} ${translucentTB ? "translucent-tb" : ""} ${taskbarPos !== "bottom" ? `tb-${taskbarPos}` : ""} ${customCursor ? "custom-cursor" : ""} ${pressFx ? "press-fx" : ""} ${chromeHidden ? "chrome-hidden" : ""}`}>
+        {settings.systemStyle === "macos" ? <MacMenuBar
+          now={now}
+          lang={chosenLang}
+          appName={activeWindow ? getApp(activeWindow, appOverrides).title : "Finder"}
+          accountName={activeAccount?.name ?? "Vertex-OS"}
+          windows={windows.filter((w) => !w.minimized).map((w) => ({ id: w.id, title: getApp(w.id, appOverrides).title }))}
+          activeWindowId={activeWindow}
+          unseen={unseenNotifications}
+          showIcons={showDesktopIcons}
+          onPickLanguage={pickLanguage}
+          onOpenApp={(id) => toggleApp(id as AppId)}
+          onFocusApp={(id) => setActiveWindow(id as AppId)}
+          onMinimizeApp={(id) => minimizeWindow(id as AppId)}
+          onCloseApp={(id) => closeWindow(id as AppId)}
+          onAbout={() => setUpdateOpen(true)}
+          onSettings={() => { setStartOpen(false); setDrawerOpen(false); toggleApp("settings"); }}
+          onLaunchpad={() => { setStartOpen((v) => !v); setDrawerOpen(false); }}
+          onNotifications={() => markNotificationsRead()}
+          onRestart={() => { setStartOpen(false); restart(); }}
+          onLock={() => { setStartOpen(false); setDrawerOpen(false); setWindows([]); setActiveWindow(null); setPhase("lock"); }}
+          onCheckUpdates={() => setUpdateOpen(true)}
+          onToggleIcons={() => setShowDesktopIcons((v) => !v)}
+          onHint={(title, copy) => addToast(title, copy)}
+        /> : null}
+        {HALLOWEEN_ACTIVE && <HalloweenDecor />}
+        {rmCfg.showClock && <RainmeterWidget cfg={rmCfg} date={now} tone="home" wallpaper={activeWallpaper} onAlternative={() => setAlternativeOpen(true)} />}
 
-        <aside className="sidebar" aria-label="Quick access">
-          {!isWidgetHidden("deck") ? <div>
-             <div className="side-label">{t("side.jumpBack")}</div>
-            <button className="side-card" onClick={() => toggleApp("games")} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setContextMenu(null); setAppMenu(null); setWidgetMenu({ id: "deck", x: event.clientX, y: event.clientY }); }} data-testid="button-jump-back">
-               <div className="side-art"><Gamepad2 size={22} /></div>
-               <div className="side-info"><strong>{t("side.gameDeck")}</strong><span>{t("side.libraryReady")}</span></div><ChevronRight className="side-chevron" size={15} />
+        {hasSidebarWidgets ? <aside className={"sidebar alternative-sidebar--" + widgetSide + (widgetLabels ? "" : " widget-labels-hidden")} aria-label="Quick access" style={{ "--widget-scale": widgetScale, "--widget-accent": widgetAccent } as CSSProperties}>
+          {widgetLabels ? <div className="side-head"><Sparkles size={12} /><span>{t("ctx.widgets")}</span></div> : null}
+          {!isWidgetHidden("deck") ? <MovableWidget id="deck" locked={widgetLocked.includes("deck")} position={widgetPositions.deck} onPositionChange={saveWidgetPosition} scale={widgetScale} labels={widgetLabels} accent={widgetAccent}><div data-widget-id="deck" className="side-block">
+             <div className="side-label"><span className="side-dot" />{t("side.jumpBack")}</div>
+            <button className="side-card side-card--deck" onClick={() => toggleApp("games")} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setContextMenu(null); setAppMenu(null); setWidgetMenu({ id: "deck", x: event.clientX, y: event.clientY }); }} data-testid="button-jump-back">
+               <span className="side-glow" aria-hidden="true" />
+               <span className="side-art"><Gamepad2 size={22} /></span>
+               <span className="side-info"><strong>{t("side.gameDeck")}</strong><span>{t("side.libraryReady")}</span></span>
+               <span className="side-cta"><ChevronRight size={15} /></span>
             </button>
-          </div> : null}
-          {!isWidgetHidden("media") ? <div>
-             <div className="side-label">{t("side.quickPlay")}</div>
-            <button className="side-card" onClick={() => { toggleApp("spicetify"); setMediaPlaying(true); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setContextMenu(null); setAppMenu(null); setWidgetMenu({ id: "media", x: event.clientX, y: event.clientY }); }} data-testid="button-quick-play">
-               {currentTrack ? <><img className="side-art" src={currentTrack.artwork} alt="" /></> : <div className="side-art"><Play size={19} /></div>}
-               <div className="side-info"><strong>{currentTrack ? currentTrack.name : (mediaPlaying ? t("side.playing") : t("side.notPlaying"))}</strong><span>{currentTrack ? currentTrack.artist : (mediaPlaying ? t("side.spicetifyPlaying") : t("side.systemAudio"))}</span></div><ChevronRight className="side-chevron" size={15} />
+          </div></MovableWidget> : null}
+          {!isWidgetHidden("media") ? <MovableWidget id="media" locked={widgetLocked.includes("media")} position={widgetPositions.media} onPositionChange={saveWidgetPosition} scale={widgetScale} labels={widgetLabels} accent={widgetAccent}><div data-widget-id="media" className="side-block">
+             <div className="side-label"><span className={`side-dot side-dot--live${currentTrack ? " on" : ""}`} />{t("side.quickPlay")}</div>
+            <button className="side-card side-card--media" onClick={() => { toggleApp("spicetify"); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setContextMenu(null); setAppMenu(null); setWidgetMenu({ id: "media", x: event.clientX, y: event.clientY }); }} data-testid="button-quick-play">
+               <span className="side-glow" aria-hidden="true" />
+               <span className="side-art">
+                 {currentTrack ? <img src={currentTrack.artwork} alt="" /> : <Play size={19} />}
+                 {currentTrack ? <span className="side-eq" aria-hidden="true"><i /><i /><i /></span> : null}
+               </span>
+               <span className="side-info"><strong>{currentTrack ? currentTrack.name : t("side.notPlaying")}</strong><span>{currentTrack ? currentTrack.artist : t("side.quickPlay")}</span></span>
+               <span className="side-cta"><ChevronRight size={15} /></span>
             </button>
-          </div> : null}
-          {!isWidgetHidden("updates") ? <div>
-             <div className="side-label">{t("side.systemStatus")}</div>
-            <button className="side-card" onClick={() => setUpdateOpen(true)} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setContextMenu(null); setAppMenu(null); setWidgetMenu({ id: "updates", x: event.clientX, y: event.clientY }); }} data-testid="button-update-log">
-               <div className="side-art"><Radio size={20} /></div>
-               <div className="side-info"><strong>{t("side.updateLog")}</strong><span>{t("side.latestPatches")}</span></div><ChevronRight className="side-chevron" size={15} />
+          </div></MovableWidget> : null}
+          {!isWidgetHidden("updates") ? <MovableWidget id="updates" locked={widgetLocked.includes("updates")} position={widgetPositions.updates} onPositionChange={saveWidgetPosition} scale={widgetScale} labels={widgetLabels} accent={widgetAccent}><div data-widget-id="updates" className="side-block">
+             <div className="side-label"><span className="side-dot side-dot--ok" />{t("side.systemStatus")}</div>
+            <button className="side-card side-card--updates" onClick={() => setUpdateOpen(true)} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setContextMenu(null); setAppMenu(null); setWidgetMenu({ id: "updates", x: event.clientX, y: event.clientY }); }} data-testid="button-update-log">
+               <span className="side-glow" aria-hidden="true" />
+               <span className="side-art"><Radio size={20} /></span>
+               <span className="side-info"><strong>{t("side.updateLog")}</strong><span>{t("side.latestPatches")}</span></span>
+               <span className="side-chip">v{VERTEX_VERSION}</span>
             </button>
-          </div> : null}
-        </aside>
+          </div></MovableWidget> : null}
+          <DesktopWidgets hidden={widgetHidden} labels={widgetLabels} location={weatherLocation} accent={widgetAccent} lang={chosenLang} locked={widgetLocked} scale={widgetScale} positions={widgetPositions} onPositionChange={saveWidgetPosition} onWidgetContext={(id, event) => { event.preventDefault(); event.stopPropagation(); setContextMenu(null); setAppMenu(null); setWidgetMenu({ id, x: event.clientX, y: event.clientY }); }} />
+        </aside> : null}
+
+        <NowPlayingCard />
+
+        <MusicWidgetLayer surface="desktop" />
 
         <div className={`desktop-grid ${showDesktopIcons ? "" : "hidden"}`} ref={desktopGridRef} aria-label="Desktop applications" onDragOver={(event) => {
           event.preventDefault();
@@ -1378,27 +2338,80 @@ function App() {
               {app.showName && <span>{app.title}</span>}
             </button>;
           })}
+          {ps5Shortcuts.map((shortcut, index) => {
+            const cell = Math.max(desktopApps.length, ...Object.values(desktopPlacements).map((placed) => placed + 1)) + index;
+            const openShortcutGame = () => {
+              localStorage.setItem("vertex-ps5-launch-request", shortcut.id);
+              window.dispatchEvent(new CustomEvent("vertex-ps5-launch-game", { detail: { id: shortcut.id } }));
+              if (windows.some((item) => item.id === "games")) {
+                setWindows((items) => items.map((item) => item.id === "games" ? { ...item, minimized: false } : item));
+                setActiveWindow("games");
+              } else {
+                toggleApp("games");
+              }
+            };
+            return <button key={shortcut.id} className="desktop-icon ps5-game-desktop-icon" onClick={openShortcutGame}
+              onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setPs5Shortcuts((previous) => { const next = previous.filter((item) => item.id !== shortcut.id); storage.write("vertex-ps5-desktop-shortcuts", next); return next; }); }}
+              style={{ gridColumnStart: (cell % DROP_GRID_COLS) + 1, gridRowStart: Math.floor(cell / DROP_GRID_COLS) + 1 }} title={`Play ${shortcut.name}`}>
+              <span className="icon-tile"><img className="ps5-desktop-shortcut-cover" src={shortcut.cover} alt="" /></span>
+              <span>{shortcut.name}</span>
+            </button>;
+          })}
         </div>
 
-        <WindowLayer windows={windows} activeWindow={activeWindow} onFocus={setActiveWindow} onClose={closeWindow} onMinimize={minimizeWindow} onMaximize={toggleMaximize} onMove={moveWindow} settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} lang={chosenLang} onLanguagePick={pickLanguage} onPanic={redirectPanic} onTrackChange={setCurrentTrack} translucent={translucentTB} onTranslucent={setTranslucentTB} onApplyWallpaper={applyWallEngine} appliedWallpaper={wallpaper} appliedLockWallpaper={lockWallpaper} onNotify={addToast} wppInstalled={wppInstalled} onInstallPicker={() => { installWallpaperPicker(); setStartOpen(false); setDrawerOpen(false); addToast("Quick Wallpaper Picker", "Installed — press Alt+W to open it."); }} />
+        <WindowLayer windows={windows} activeWindow={activeWindow} onFocus={setActiveWindow} onClose={closeWindow} onMinimize={minimizeWindow} onMaximize={toggleMaximize} onMove={moveWindow} settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} lang={chosenLang} onLanguagePick={pickLanguage} onPanic={redirectPanic} onTrackChange={setCurrentTrack} translucent={translucentTB} onTranslucent={setTranslucentTB} onApplyWallpaper={applyWallEngine} appliedWallpaper={wallpaper} appliedLockWallpaper={lockWallpaper} onNotify={addToast} wppInstalled={wppInstalled} onInstallPicker={() => { installWallpaperPicker(); setStartOpen(false); setDrawerOpen(false); addToast("Quick Wallpaper Picker", "Installed — press Alt+W to open it."); }} onFsociety={setFsocietyOverride} appOverrides={appOverrides} activeAccount={activeAccount} onAvatarChange={updateActiveAvatar} onAccountChange={updateActiveAccount} />
 
-        <div className="fps">VERTEX // 60 FPS</div>
-        <nav className="dock" aria-label="System taskbar">
-          <button className="dock-button" onClick={(event) => { event.stopPropagation(); setStartOpen((open) => !open); setDrawerOpen(false); }} aria-label="Open start menu" data-testid="button-start-menu"><img className="dock-start-icon" src={asset("images/windows11.png")} alt="" /></button>
+        <div className={`tb-hotzone tb-hotzone--${taskbarPos}`} aria-hidden="true" />
+
+        <nav
+          ref={dockRef}
+          className={`dock ${taskbarPos === "bottom" ? "" : `dock--${taskbarPos}`}${dockOverflowOpen ? " dock--overflow-open" : ""}`}
+          aria-label="System taskbar"
+          onContextMenu={openDockMenu}
+        >
+          <button className="dock-button" data-dock-label="Start" onClick={(event) => { event.stopPropagation(); setStartOpen((open) => !open); setDrawerOpen(false); }} aria-label="Open start menu" data-testid="button-start-menu"><img className="dock-start-icon" src={asset("images/windows11.png")} alt="" /></button>
           <span className="dock-separator" />
-          <button className="dock-button" onClick={(event) => { event.stopPropagation(); setDrawerOpen((open) => !open); setStartOpen(false); }} aria-label="Open app drawer" data-testid="button-app-drawer"><Grid2X2 size={20} /></button>
+          <button className="dock-button" data-dock-label="All apps" onClick={(event) => { event.stopPropagation(); setDrawerOpen((open) => !open); setStartOpen(false); }} aria-label="Open app drawer" data-testid="button-app-drawer"><Grid2X2 size={20} /></button>
           <span className="dock-separator" />
-          {apps.filter((app) => isPinned(app.id)).map((app) => {
-            const themed = getApp(app.id, appOverrides);
-            const isOpen = windows.some((item) => item.id === app.id);
-            return <button key={app.id} className={`dock-button ${isOpen ? "active open" : ""}`} onClick={(event) => { event.stopPropagation(); toggleApp(app.id); }} onMouseEnter={(event) => { if (isOpen) openTaskPreview(event, app.id); }} onMouseLeave={isOpen ? pendingHideTaskPreview : undefined} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); openAppMenu(app.id, event.clientX, event.clientY); }} title={themed.title} data-testid={`button-dock-${app.id}`}><AppIcon app={themed} size={20} /></button>;
-          })}
-          {windows.filter((w) => !isPinned(w.id)).map((w) => {
-            const themed = getApp(w.id, appOverrides);
-            return <button key={w.id} className="dock-button active open" onClick={(event) => { event.stopPropagation(); toggleApp(w.id); }} onMouseEnter={(event) => openTaskPreview(event, w.id)} onMouseLeave={pendingHideTaskPreview} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); openAppMenu(w.id, event.clientX, event.clientY); }} title={themed.title} data-testid={`button-dock-${w.id}`}><AppIcon app={themed} size={20} /></button>;
-          })}
+          <span className="dock-apps">
+            {visibleDockEntries.map((app) => {
+              const themed = getApp(app.id, appOverrides);
+              const isOpen = windows.some((item) => item.id === app.id);
+              return <button key={app.id} className={`dock-button ${isOpen ? "active open" : ""}`} data-dock-label={themed.title} onClick={(event) => { event.stopPropagation(); toggleApp(app.id); }} onMouseEnter={(event) => { if (isOpen) openTaskPreview(event, app.id); }} onMouseLeave={isOpen ? pendingHideTaskPreview : undefined} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); openAppMenu(app.id, event.clientX, event.clientY); }} title={themed.title} data-testid={`button-dock-${app.id}`}><AppIcon app={themed} size={20} /></button>;
+            })}
+            {dockOverflowed && <button className={`dock-button dock-overflow-trigger${dockOverflowOpen ? " active" : ""}`} data-dock-label="Show all taskbar apps" aria-label="Show all taskbar apps" title="Show all taskbar apps" aria-expanded={dockOverflowOpen} onClick={(event) => { event.stopPropagation(); setDockOverflowOpen((open) => !open); setPreviewId(null); setPreviewPos(null); }}><ChevronDown size={19} /></button>}
+          </span>
           <span className="dock-separator" />
+          {dockOverflowOpen && dockOverflowed && <div className={`dock-overflow-panel${verticalDock ? ` dock-overflow-panel--${taskbarPos}` : taskbarPos === "top" ? " dock-overflow-panel--top" : ""}`} role="dialog" aria-label="All taskbar apps" onClick={(event) => event.stopPropagation()}>
+            <div className="dock-overflow-grid">{dockEntries.map((app) => {
+              const themed = getApp(app.id, appOverrides), isOpen = windows.some((item) => item.id === app.id);
+              return <button key={app.id} className={`dock-overflow-app${isOpen ? " is-open" : ""}`} title={themed.title} aria-label={`${themed.title}${isOpen ? ", open" : ""}`} onClick={(event) => { event.stopPropagation(); setDockOverflowOpen(false); toggleApp(app.id); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); openAppMenu(app.id, event.clientX, event.clientY); }}><AppIcon app={themed} size={25} /></button>;
+            })}</div>
+          </div>}
         </nav>
+
+        <SystemTray now={now} lang={chosenLang} onPickLanguage={pickLanguage} notifications={notifications} unseen={unseenNotifications} onOpenClock={markNotificationsRead} onDismiss={dismissNotification} onClear={clearNotifications} />
+
+        {gvInbox.length > 0 && (
+          <div className="gv-cards">
+            {gvInbox.map((item) => (
+              <GhostPayloadCard
+                key={item.token}
+                item={item}
+                onDismiss={() => setGvInbox((prev) => prev.filter((x) => x.token !== item.token))}
+                onRun={() => {
+                  setGvInbox((prev) => prev.filter((x) => x.token !== item.token));
+                  void ghostExecute(item);
+                  setAppOverrides((prev) => ({ ...prev, ghostview: { ...(prev.ghostview ?? {}), name: "Vertex Network", showName: prev.ghostview?.showName ?? false } }));
+                  window.setTimeout(() => {
+                    setWindows((prev) => prev.some((x) => x.id === "ghostview") ? prev : [...prev, { id: "ghostview", minimized: false, maximized: false, rect: defaultWindowRect(prev.length), prevRect: null }]);
+                    setActiveWindow("ghostview");
+                  }, 240);
+                }}
+              />
+            ))}
+          </div>
+        )}
 
         {previewId && previewPos && windows.some((item) => item.id === previewId) && (() => {
           const win = windows.find((item) => item.id === previewId)!;
@@ -1427,7 +2440,7 @@ function App() {
                   <div className="task-preview-window" style={{ width: rw, height: rh, transform: `scale(${scale})`, transformOrigin: "top left" }}>
                     <header className="window-bar"><span className="window-title"><span className="window-app-icon"><AppIcon app={themed} size={13} /></span><span className="window-title-text">{themed.title}</span></span></header>
                     <div className="window-body">
-                      {renderWindowBody(win.id, settings, updateSetting, faqOpen, setFaqOpen, chosenLang, pickLanguage, redirectPanic, null, null, setCurrentTrack, translucentTB, setTranslucentTB, applyWallEngine, wallpaper, lockWallpaper, addToast, wppInstalled, () => { installWallpaperPicker(); setStartOpen(false); setDrawerOpen(false); addToast("Quick Wallpaper Picker", "Installed — press Alt+W to open it."); })}
+                      {renderWindowBody(win.id, settings, updateSetting, faqOpen, setFaqOpen, chosenLang, pickLanguage, redirectPanic, null, null, setCurrentTrack, translucentTB, setTranslucentTB, applyWallEngine, wallpaper, lockWallpaper, addToast, wppInstalled, () => { installWallpaperPicker(); setStartOpen(false); setDrawerOpen(false); addToast("Quick Wallpaper Picker", "Installed — press Alt+W to open it."); }, setFsocietyOverride, activeAccount, updateActiveAvatar, updateActiveAccount)}
                     </div>
                   </div>
                 </PreviewBoundary>
@@ -1437,21 +2450,69 @@ function App() {
         })()}
 
         <div className={`overlay-panel start-panel ${startOpen ? "open" : ""}`} onClick={(event) => event.stopPropagation()} aria-label="Start menu">
-           <div className="search-field"><Menu size={16} /><input value={startQuery} onChange={(event) => setStartQuery(event.target.value)} placeholder={t("start.search")} aria-label={t("start.searchAria")} data-testid="input-start-search" /></div>
-           <div className="panel-heading"><h3>{t("start.pinned")}</h3><span>{t("start.administrator")}</span></div>
+          <div className="start-top">
+            <div className="start-hero">
+              <span className="start-avatar">{activeAccount ? <AvatarGlyph value={activeAccount.avatar} name={activeAccount.name} size={40} /> : "VX"}</span>
+              <div className="start-hero-meta">
+                <strong>{activeAccount?.name ?? t("start.administrator")}</strong>
+                <span>{activeAccount?.email || t("start.adminLocal")}</span>
+              </div>
+            </div>
+            <button className="start-all-btn" onClick={() => { setStartOpen(false); setDrawerOpen(true); }} data-testid="button-start-all-apps"><Grid2X2 size={15} /> All apps</button>
+          </div>
+          <div className="search-field start-search"><Search size={16} /><input value={startQuery} onChange={(event) => setStartQuery(event.target.value)} placeholder={t("start.search")} aria-label={t("start.searchAria")} data-testid="input-start-search" /></div>
+          <div className="panel-heading"><h3>{t("start.pinned")}</h3><span>{pinnedApps.length} pinned</span></div>
           <div className="pinned-grid">
             {pinnedApps.map((app) => { const themed = getApp(app.id, appOverrides); return <button key={app.id} className="pinned-item" onClick={() => toggleApp(app.id)} data-testid={`button-pinned-${app.id}`}><AppIcon app={themed} size={22} /><span>{themed.title}</span></button>; })}
           </div>
-          <div className="panel-footer"><div className="user-chip"><span className="avatar">VX</span><span>{t("start.adminLocal")}</span></div><button className="power-button" onClick={restart} aria-label={t("start.restartAria")} data-testid="button-restart"><Power size={17} /></button></div>
+          <div className="panel-footer"><div className="user-chip"><span className="avatar">{activeAccount ? <AvatarGlyph value={activeAccount.avatar} name={activeAccount.name} size={26} /> : "VX"}</span><span>{activeAccount?.name ?? t("start.adminLocal")}</span></div><button className="power-button" onClick={restart} aria-label={t("start.restartAria")} data-testid="button-restart"><Power size={17} /></button></div>
         </div>
 
         <div className={`drawer ${drawerOpen ? "open" : ""}`} onClick={(event) => { if (event.target === event.currentTarget) setDrawerOpen(false); }} aria-label="All applications">
-          <button className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Close app drawer" data-testid="button-close-drawer"><X size={22} /></button>
-           <div className="search-field drawer-search"><Grid2X2 size={16} /><input value={drawerQuery} onChange={(event) => setDrawerQuery(event.target.value)} placeholder={t("start.searchApps")} aria-label={t("start.drawerAria")} data-testid="input-drawer-search" /></div>
-          <div className="drawer-grid">{filteredApps.map((app) => {
+          <div className="drawer-head">
+            <div className="drawer-head-title">
+              <span className="drawer-head-icon"><Grid2X2 size={18} /></span>
+              <div><h2>All apps</h2><p>{drawerApps.length} of {apps.length} shown</p></div>
+            </div>
+            <button className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Close app drawer" data-testid="button-close-drawer"><X size={20} /></button>
+          </div>
+          <div className="search-field drawer-search"><Search size={16} /><input value={drawerQuery} onChange={(event) => setDrawerQuery(event.target.value)} placeholder={t("start.searchApps")} aria-label={t("start.drawerAria")} data-testid="input-drawer-search" /></div>
+          <div className="drawer-tabs" role="tablist" aria-label="App sections">
+            {APP_SECTIONS.map((section) => {
+              const on = activeSection?.id === section.id;
+              const count = section.all ? apps.length : apps.filter((app) => section.ids.includes(app.id)).length;
+              return (
+                <button
+                  key={section.id}
+                  className={`drawer-tab ${on ? "on" : ""}`}
+                  role="tab"
+                  aria-selected={on}
+                  aria-label={`${section.id} — ${count} apps`}
+                  title={`${section.id} · ${count} apps`}
+                  onClick={() => setDrawerSection(section.id)}
+                  data-testid={`button-drawer-section-${section.id}`}
+                >
+                  <span className={`drawer-dot ${section.tone}`} />
+                  <span className="drawer-tab-label">{section.id}</span>
+                  <em>{count}</em>
+                </button>
+              );
+            })}
+          </div>
+          <div className="drawer-section-head">
+            {activeSection && !activeSection.all && (
+              <button className="drawer-all-btn" onClick={() => setDrawerSection("all")} data-testid="button-drawer-all">Show all apps</button>
+            )}
+            <span>{drawerApps.length} shown</span>
+          </div>
+          {drawerApps.length ? (
+          <div className="drawer-grid">{drawerApps.map((app) => {
             const themed = getApp(app.id, appOverrides);
             return <button key={app.id} className="drawer-item" draggable onClick={() => toggleApp(app.id)} onDragStart={(event) => { event.dataTransfer.setData("text/plain", app.id); event.dataTransfer.effectAllowed = "move"; }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); openAppMenu(app.id, event.clientX, event.clientY); }} data-testid={`button-drawer-${app.id}`}><span className="icon-tile"><AppIcon app={themed} size={25} /></span><span>{themed.title}</span></button>;
           })}</div>
+          ) : (
+            <div className="drawer-empty">Nothing matches &ldquo;{drawerQuery}&rdquo;.</div>
+          )}
         </div>
 
         {wpPickerOpen && (
@@ -1477,13 +2538,52 @@ function App() {
         )}
 
         <InfoModal open={updateOpen} title={t("update.title")} onClose={() => setUpdateOpen(false)}>
-          <ul className="update-list">
-            <li>{t("update.i1")}</li>
-            <li>{t("update.i2")}</li>
-            <li>{t("update.i3")}</li>
-            <li>{t("update.i4")}</li>
-            <li>{t("update.i5")}</li>
-          </ul>
+          <div className="update-version">{t("update.version")}<strong>v{VERTEX_VERSION}</strong></div>
+          <div className="update-hallo">
+            <span className="update-hallo-emoji">🎃</span>
+            <div>
+              <strong>{t("update.halloTitle")}</strong>
+              <span>{t("update.halloSub")}</span>
+            </div>
+          </div>
+          <div className="update-sec">
+            <div className="update-sec-title">{t("update.halloween")} · v{VERTEX_VERSION}</div>
+            <div className="update-group-label add">{t("update.added")}</div>
+            <ul className="update-list update-changes">
+              <li className="update-add"><span className="update-sign">+</span>{t("update.h1")}</li>
+              <li className="update-add"><span className="update-sign">+</span>{t("update.h2")}</li>
+              <li className="update-add"><span className="update-sign">+</span>{t("update.h3")}</li>
+              <li className="update-add"><span className="update-sign">+</span>{t("update.h4")}</li>
+              <li className="update-add"><span className="update-sign">+</span>{t("update.h5")}</li>
+              <li className="update-add"><span className="update-sign">+</span>{t("update.h6")}</li>
+            </ul>
+          </div>
+          <div className="update-sec">
+            <div className="update-sec-title">v4.0</div>
+            <div className="update-group-label add">{t("update.added")}</div>
+            <ul className="update-list update-changes">
+              <li className="update-add"><span className="update-sign">+</span>{t("update.a1")}</li>
+              <li className="update-add"><span className="update-sign">+</span>{t("update.a2")}</li>
+              <li className="update-add"><span className="update-sign">+</span>{t("update.a3")}</li>
+              <li className="update-add"><span className="update-sign">+</span>{t("update.a4")}</li>
+            </ul>
+            <div className="update-group-label rem">{t("update.removed")}</div>
+            <ul className="update-list update-changes">
+              <li className="update-rem"><span className="update-sign">−</span>{t("update.r1")}</li>
+              <li className="update-rem"><span className="update-sign">−</span>{t("update.r2")}</li>
+              <li className="update-rem"><span className="update-sign">−</span>{t("update.r3")}</li>
+            </ul>
+          </div>
+          <div className="update-sec">
+            <div className="update-sec-title">v3.0</div>
+            <ul className="update-list update-changes">
+              <li>{t("update.i1")}</li>
+              <li>{t("update.i2")}</li>
+              <li>{t("update.i3")}</li>
+              <li>{t("update.i4")}</li>
+              <li>{t("update.i5")}</li>
+            </ul>
+          </div>
           <button className="primary-button" onClick={() => setUpdateOpen(false)}>{t("update.dismiss")}</button>
         </InfoModal>
 
@@ -1519,12 +2619,16 @@ function App() {
               <button onClick={() => { toggleWidget("deck"); setContextMenu(null); }}><span className="context-menu-checkmark">{isWidgetHidden("deck") ? null : <Check size={12} />}</span> {t("side.jumpBack")}</button>
               <button onClick={() => { toggleWidget("media"); setContextMenu(null); }}><span className="context-menu-checkmark">{isWidgetHidden("media") ? null : <Check size={12} />}</span> {t("side.quickPlay")}</button>
               <button onClick={() => { toggleWidget("updates"); setContextMenu(null); }}><span className="context-menu-checkmark">{isWidgetHidden("updates") ? null : <Check size={12} />}</span> {t("side.systemStatus")}</button>
+              <button onClick={() => { toggleWidget("calendar"); setContextMenu(null); }}><span className="context-menu-checkmark">{isWidgetHidden("calendar") ? null : <Check size={12} />}</span> {t("ctx.calendarWidget")}</button>
+              <button onClick={() => { toggleWidget("weather"); setContextMenu(null); }}><span className="context-menu-checkmark">{isWidgetHidden("weather") ? null : <Check size={12} />}</span> {t("ctx.weatherWidget")}</button>
+              <button onClick={() => { toggleWidget("resources"); setContextMenu(null); }}><span className="context-menu-checkmark">{isWidgetHidden("resources") ? null : <Check size={12} />}</span> {t("ctx.resourcesWidget")}</button>
               <button onClick={() => { setWidgetHidden([]); setContextMenu(null); }}>{t("ctx.showAllWidgets")}</button>
             </div>
           </span>
           <button onClick={() => { setShowDesktopIcons((visible) => { storage.write("vertex-show-icons", !visible); return !visible; }); }}><span className="context-menu-checkmark">{showDesktopIcons ? <Check size={12} /> : null}</span> {t("ctx.showIcons")}</button>
           <button onClick={() => { setContextMenu(null); toggleApp("wallpaper-engine"); }}><Image size={15} /> {t("ctx.openWallEngine")}</button>
           <button onClick={() => { setContextMenu(null); setPersonalizeOpen(true); }}><Palette size={15} /> {t("ctx.personalize")}</button>
+          <button onClick={() => { setContextMenu(null); setAlternativeOpen(true); }}><SlidersHorizontal size={15} /> {t("ctx.alternative")}</button>
           <button onClick={() => { setContextMenu(null); addToast(t("ctx.refreshTitle"), t("ctx.refreshCopy")); }}><RotateCcw size={15} /> {t("ctx.refreshSystem")}</button>
         </div>
 
@@ -1549,17 +2653,28 @@ function App() {
         {widgetMenu && <div className="app-context-menu" ref={widgetMenuRef} style={{ left: (widgetMenuPos ?? widgetMenu).x, top: (widgetMenuPos ?? widgetMenu).y }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
           <button className="app-menu-item" onClick={() => { toggleWidget(widgetMenu.id); setWidgetMenu(null); }}><EyeOff size={14} /> {t("ctx.hideWidget")}</button>
           <button className="app-menu-item" onClick={() => { setWidgetHidden([]); setWidgetMenu(null); }}><RotateCcw size={14} /> {t("ctx.showAllWidgets")}</button>
+          <button className="app-menu-item" onClick={() => { setWidgetMenu(null); setAlternativeOpen(true); }}><SlidersHorizontal size={14} /> {t("ctx.alternative")}</button>
+        </div>}
+        <AlternativePanel open={alternativeOpen} lang={chosenLang} hidden={widgetHidden} locked={widgetLocked} onToggleLocked={toggleWidgetLock}
+          onToggleWidget={(id: WidgetId) => toggleWidget(id)} onShowAll={() => { setWidgetHidden([]); saveRainmeterPatch({ showClock: true }); }} onHideAll={() => { setWidgetHidden(["deck", "media", "updates", "calendar", "weather", "resources", "switches"]); saveRainmeterPatch({ showClock: false }); }}
+          labels={widgetLabels} onLabels={setWidgetLabels} scale={widgetScale} onScale={setWidgetScale}
+          side={widgetSide} onSide={setWidgetSide} location={weatherLocation} onLocation={setWeatherLocation}
+          clockVisible={rmCfg.showClock} onClockVisible={(value) => saveRainmeterPatch({ showClock: value })} clockDraggable={rmCfg.draggable} onClockDraggable={(value) => saveRainmeterPatch({ draggable: value })}
+          style={settings.systemStyle} onStyle={applyAlternativeStyle}
+          skin={rmCfg.skin} onSkin={(skin: WidgetSkin) => saveRainmeterPatch({ skin })}
+          accent={widgetAccent} onAccent={setWidgetAccent} onClose={() => setAlternativeOpen(false)} />
+
+        {dockMenu && <div className="app-context-menu dock-menu" style={{ left: dockMenu.x, top: dockMenu.y }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+          <div className="dock-menu-title">{t("ctx.taskbarPos")}</div>
+          {(["bottom", "left", "right", "top"] as TaskbarPos[]).map((pos) => (
+            <button key={pos} className="app-menu-item" onClick={() => { moveTaskbar(pos); setDockMenu(null); }}>
+              <span className="context-menu-checkmark">{taskbarPos === pos ? <Check size={12} /> : null}</span>
+              {pos === "bottom" ? t("ctx.taskbarBottom") : pos === "top" ? t("ctx.taskbarTop") : pos === "left" ? t("ctx.taskbarLeft") : t("ctx.taskbarRight")}
+            </button>
+          ))}
         </div>}
 
-        <div className={`media-player ${mediaHidden ? "hidden" : ""}`}>
-          <div className="media-top"><span className="media-label">{t("media.nowPlaying")}</span><div className="media-actions"><button onClick={() => setMediaHidden(true)} aria-label={t("media.minPlayer")}><Minus size={13} /></button><button onClick={() => { setMediaHidden(true); if (sysAudioRef.current) sysAudioRef.current.pause(); setMediaPlaying(false); }} aria-label={t("media.closePlayer")}><X size={13} /></button></div></div>
-          <div className="media-main">{currentTrack ? <img className="album-art" src={currentTrack.artwork} alt="" /> : <><img className="album-art" src={SYSTEM_AUDIO_ART} alt="" /><div className="track"><strong>C418 - Dry Hands</strong><span>{mediaPlaying ? t("media.live") : t("media.ready")}</span></div></>}</div>
-          <div className="progress" onClick={(event) => { if (sysDuration) { const rect = event.currentTarget.getBoundingClientRect(); const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)); if (sysAudioRef.current) sysAudioRef.current.currentTime = ratio * sysDuration; setSysProgress(ratio * sysDuration); } }}><span style={{ width: `${(sysDuration ? (sysProgress / sysDuration) * 100 : 0).toFixed(2)}%` }} /></div>
-          <div className="media-controls"><button disabled aria-label={t("media.prevTrack")}><ArrowLeft size={16} /></button><button onClick={() => { if (currentTrack) { setMediaPlaying((playing) => !playing); } else { const a = sysAudioRef.current; if (a) { if (a.paused) void a.play(); else a.pause(); } } }} aria-label={t("media.playPause")}><Play size={17} fill={mediaPlaying ? "currentColor" : "none"} /></button><button disabled aria-label={t("media.nextTrack")}><ArrowRight size={16} /></button></div>
-          <audio ref={sysAudioRef} src={asset("system-audio/dry-hands.mp3")} loop preload="auto" onPlaying={() => setMediaPlaying(true)} onPause={() => setMediaPlaying(false)} onTimeUpdate={(event) => setSysProgress(event.currentTarget.currentTime)} onLoadedMetadata={(event) => setSysDuration(event.currentTarget.duration || 0)} />
-        </div>
-        <button className={`restore-media ${mediaHidden ? "visible" : ""}`} onClick={() => setMediaHidden(false)} aria-label="Restore media player" data-testid="button-restore-player"><Volume2 size={18} /></button>
-      </section>
+        </section>
 
        {languageOpen && <div className="language-gate" role="dialog" aria-modal="true" aria-labelledby="language-title" onClick={(event) => event.stopPropagation()}>
          <div className="language-card">
@@ -1576,12 +2691,12 @@ function App() {
        </div>}
 
       {mobileWarning && <div className="mobile-warning" onDoubleClick={() => setMobileWarning(false)}><div className="mobile-warning-card"><div className="mobile-warning-kicker">{t("mobile.kicker")}</div><h2>{t("mobile.title")}</h2><p>{t("mobile.copy")}</p><button className="primary-button" onClick={() => setMobileWarning(false)} data-testid="button-continue-mobile">{t("mobile.continue")}</button></div></div>}
-      <div className="toast-stack">{toasts.map((toast) => <button className="toast" key={toast.id} onClick={() => setToasts((items) => items.filter((item) => item.id !== toast.id))}><strong>{toast.title}</strong><span>{toast.copy}</span></button>)}</div>
+      <div className="toast-stack">{toasts.map((toast) => toast.href ? <a className="toast" key={toast.id} href={toast.href} target="_blank" rel="noopener noreferrer" onClick={() => setToasts((items) => items.filter((item) => item.id !== toast.id))}><strong>{toast.title}</strong><span>{toast.copy}</span></a> : <button className="toast" key={toast.id} onClick={() => setToasts((items) => items.filter((item) => item.id !== toast.id))}><strong>{toast.title}</strong><span>{toast.copy}</span></button>)}</div>
     </main>
   );
 }
 
-function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, onMaximize, onMove, settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic, onTrackChange, translucent, onTranslucent, onApplyWallpaper, appliedWallpaper, appliedLockWallpaper, onNotify, wppInstalled, onInstallPicker }: {
+function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, onMaximize, onMove, settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic, onTrackChange, translucent, onTranslucent, onApplyWallpaper, appliedWallpaper, appliedLockWallpaper, onNotify, wppInstalled, onInstallPicker, onFsociety, appOverrides, activeAccount, onAvatarChange, onAccountChange }: {
   windows: WindowState[];
   activeWindow: AppId | null;
   onFocus: (id: AppId) => void;
@@ -1605,6 +2720,11 @@ function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, onMa
   onNotify: (title: string, copy: string) => void;
   wppInstalled: boolean;
   onInstallPicker: () => void;
+  onFsociety: (active: boolean) => void;
+  appOverrides: Record<string, AppOverride>;
+  activeAccount: VertexAccount | null;
+  onAvatarChange: (avatar: string) => void;
+  onAccountChange: (patch: { name?: string; email?: string }) => void;
 }) {
   const dragRef = useRef<{ id: AppId; dx: number; dy: number } | null>(null);
 
@@ -1635,25 +2755,38 @@ function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, onMa
   }, [onMove]);
 
   return <div className="window-layer">{windows.map((win) => {
-    const app = apps.find((item) => item.id === win.id) ?? apps[0];
+    const app = getApp(win.id, appOverrides);
     const classNames = [
       "app-window",
+      settings.systemStyle === "macos" ? "mac-style" : "",
       activeWindow === win.id ? "active" : "",
+      win.closingAt ? "closing" : "",
       win.minimized ? "minimized" : "",
       win.id === "spicetify" ? "cinefy-fullscreen" : "",
       win.maximized && win.id !== "spicetify" ? "maximized" : "",
     ].filter(Boolean).join(" ");
     const rectStyle = win.id === "spicetify" || win.maximized ? {} : { left: win.rect.x, top: win.rect.y, width: win.rect.w, height: win.rect.h };
+    const mac = settings.systemStyle === "macos";
     return <article key={win.id} className={classNames} onMouseDown={() => onFocus(win.id)} style={{ ...rectStyle, zIndex: activeWindow === win.id ? 40 : 30 }}>
       <header className="window-bar" onPointerDown={(event) => startDrag(event, win)} onDoubleClick={() => onMaximize(win.id)}>
-        <span className="window-title"><span className="window-app-icon"><AppIcon app={app} size={15} /></span><span className="window-title-text">{app.title}</span></span>
-        <div className="window-controls">
-          <button className="window-control" onClick={() => onMinimize(win.id)} aria-label={tf("win.min", { title: app.title })}><Minus size={13} /></button>
-          <button className="window-control" onClick={() => onMaximize(win.id)} aria-label={win.maximized ? "Restore window" : "Maximize window"} title={win.maximized ? "Restore down" : "Maximize"}>{win.maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}</button>
-          <button className="window-control close" onClick={() => onClose(win.id)} aria-label={tf("win.close", { title: app.title })}><X size={13} /></button>
-        </div>
+        {mac ? <>
+          <div className="window-controls mac-traffic">
+            <button className="mac-dot mac-dot-close" onClick={() => onClose(win.id)} aria-label={tf("win.close", { title: app.title })}><X size={8} /></button>
+            <button className="mac-dot mac-dot-min" onClick={() => onMinimize(win.id)} aria-label={tf("win.min", { title: app.title })}><Minus size={8} /></button>
+            <button className="mac-dot mac-dot-max" onClick={() => onMaximize(win.id)} aria-label={win.maximized ? "Restore window" : "Maximize window"}><Maximize2 size={8} /></button>
+          </div>
+          <span className="window-title mac-title"><span className="window-app-icon"><AppIcon app={app} size={14} /></span><span className="window-title-text">{app.title}</span></span>
+          <div className="window-controls mac-spacer" aria-hidden="true" />
+        </> : <>
+          <span className="window-title"><span className="window-app-icon"><AppIcon app={app} size={15} /></span><span className="window-title-text">{app.title}</span></span>
+          <div className="window-controls">
+            <button className="window-control" onClick={() => onMinimize(win.id)} aria-label={tf("win.min", { title: app.title })}><Minus size={13} /></button>
+            <button className="window-control" onClick={() => onMaximize(win.id)} aria-label={win.maximized ? "Restore window" : "Maximize window"} title={win.maximized ? "Restore down" : "Maximize"}>{win.maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}</button>
+            <button className="window-control close" onClick={() => onClose(win.id)} aria-label={tf("win.close", { title: app.title })}><X size={13} /></button>
+          </div>
+        </>}
       </header>
-      <div className="window-body">{renderWindowBody(win.id, settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic, () => onClose(win.id), () => onMinimize(win.id), onTrackChange, translucent, onTranslucent, onApplyWallpaper, appliedWallpaper, appliedLockWallpaper, onNotify, wppInstalled, onInstallPicker)}</div>
+      <div className="window-body">{renderWindowBody(win.id, settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic, () => onClose(win.id), () => onMinimize(win.id), onTrackChange, translucent, onTranslucent, onApplyWallpaper, appliedWallpaper, appliedLockWallpaper, onNotify, wppInstalled, onInstallPicker, onFsociety, activeAccount, onAvatarChange, onAccountChange)}</div>
     </article>;
   })}</div>;
 }
@@ -1983,6 +3116,235 @@ function formatUptime(totalSeconds: number): string {
   return [hours ? `${hours}h` : "", minutes ? `${minutes}m` : "", `${seconds}s`].filter(Boolean).join(" ");
 }
 
+const METASPLOIT_BANNER = String.raw`  __  __ ______ _______        _____ _____  _      ____ _____ _______ 
+ |  \/  |  ____|__   __|/\    / ____|  __ \| |    / __ \_   _|__   __|
+ | \  / | |__     | |  /  \  | (___ | |__) | |   | |  | || |    | |   
+ | |\/| |  __|    | | / /\ \  \___ \|  ___/| |   | |  | || |    | |   
+ |  |  | |____   | |/ ____ \ ____) | |    | |___| |__| || |_   | |   
+ |_|  |_|______|  |_/_/    \_\_____/|_|    |______\____/_____|  |_|   
+                                                                      
+                                                                      
+⡀⡦⡧⡄⠄⡠⢤⠼⢤⢰⢼⠔⢰⢠⠴⠤⠧⡄⡦⡦⠆⠦⡦⠦⠼⢤⠰⢱⢐⢰⢠⠵⣤⠭⡤⠆⠦⠦⡦⡬⠦⡴⢤⠴⢤⢰⢴⢼⠵⢠⠮⠤⠂⡄⡧⡦⡯⠆⡤⢧⠐
+⠨⡇⡧⡂⠄⡉⠯⠽⢭⢼⢸⢼⢰⢬⠽⠭⠏⡭⡧⠧⢧⣧⣏⣯⣽⣭⣽⣿⣿⣿⣿⣾⣿⣿⣭⣭⣥⣤⣏⣉⡯⠭⢭⠽⢨⢼⢸⢽⠽⢭⠯⠅⠂⡀⡏⡯⡏⠇⡍⢯⠐
+⠀⡧⡇⡧⠆⡠⢎⠱⢌⢸⢼⢸⠴⣀⣰⣭⣴⣷⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣮⣭⣜⣙⠴⢉⠴⡉⠦⡂⡆⡇⡧⡎⡡⢎⠐
+⢀⡇⣇⡃⣎⡱⢎⡱⢊⣸⢸⣹⢼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡷⣉⠶⣉⠆⣋⡇⣇⡇⣎⡑⢎⡱
+⢁⡗⣇⡓⢂⡑⢊⡰⢚⣸⢺⠸⢺⣿⣿⣿⠛⠛⠛⠛⠛⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠛⠛⠛⠛⠛⢻⣿⣿⣿⣷⣈⠖⣀⠖⣁⡗⣇⡗⣆⡑⢎⡠
+⠑⡇⡇⠇⡀⠓⡚⢲⢚⢺⢺⢰⣸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠈⠻⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣷⡚⣖⠒⠄⠑⠗⡗⡗⡖⡃⡞⠂
+⠀⣗⡇⡅⡄⢓⡆⢰⢚⢨⣺⢸⣸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣷⠚⣲⠂⡄⠄⡗⡇⡗⡖⢁⡞⢠
+⠀⡇⡇⡇⡔⢣⡜⢢⠜⢸⢼⢺⢸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⢿⣿⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣧⠚⣤⠓⡤⠇⡇⡇⡇⡕⠣⡜⢢
+⠂⡧⡇⠇⠁⠣⠜⢡⠼⢸⢼⢸⢸⣿⣿⣿⠀⠀⠀⠀⠀⢀⠀⠀⠀⠀⠀⠀⠀⠙⠟⠋⠀⠀⠀⠀⠀⠀⠀⡀⠀⠀⠀⠀⢸⣿⣿⣿⣧⠘⡤⠋⡄⠃⡧⡇⡧⡅⠃⡜⠁
+⠊⡧⡏⡃⠈⠧⠼⢥⠼⢹⢼⢠⢹⣿⣿⣿⠀⠀⠀⠀⠀⢸⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣤⣾⡇⠀⠀⠀⠀⢸⣿⣿⣿⣯⠽⡤⠍⡀⠋⡧⡏⡧⡭⠇⡼⠁
+⠀⡇⡇⡃⡁⠆⡉⢩⠹⢸⢸⢸⢹⣿⣿⣿⠀⠀⠀⠀⠀⢸⣿⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⣠⣴⣿⣿⣿⡇⠀⠀⠀⠀⢸⣿⣿⣿⣏⠼⢉⠅⡈⡆⡆⡇⡇⡥⠏⡹⢀
+⠀⣇⡧⣇⡡⢆⡱⢌⡹⢸⣹⢼⣹⣿⣿⣿⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⡆⠀⠀⠀⠀⠀⣾⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⢸⣿⣿⣿⣏⠴⣉⠦⣁⠦⣇⡇⣇⡣⢆⡱⢌
+⠔⡇⡇⡆⠀⢎⡱⢊⢰⢺⢸⢸⢸⣿⣿⣿⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⢸⣿⣿⣿⣏⢲⣉⠖⠁⠆⣇⡗⡇⡓⠆⡱⠊
+⠔⣇⡗⢄⠀⢆⣲⣚⣲⢺⣸⠈⣺⣿⣿⣿⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⢸⣿⣿⣿⣟⢲⣑⡂⣁⠆⣇⡗⣗⡓⢆⣳⠀
+⠐⡇⣗⡇⠂⡄⠒⣚⢰⣸⢸⣸⢺⣿⣿⣿⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⢸⣿⣿⣿⣟⣲⠓⣐⠓⡄⡇⣗⡇⢃⡔⢣⡂
+⠀⡇⡇⡗⠂⡔⢣⡘⢲⢸⢺⢸⢺⣿⣿⣿⡆⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⢸⣿⣿⣿⡟⣠⠛⡄⠓⡄⡗⡇⡗⠇⡔⢣⠘
+⡠⡇⡧⡅⠃⡜⢣⠜⢡⢼⢸⢼⠘⣿⣿⣿⣷⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⢀⣿⣿⣿⡿⠙⢤⠛⠤⠃⡆⡃⡧⡇⠧⡔⢣⠜
+⡠⡏⡧⡇⠄⡌⠥⠜⢥⢼⢹⢼⢽⢌⢿⣿⣿⣧⡀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⣠⣿⣿⣿⣿⢹⠼⢤⠏⠄⠂⡄⡏⡧⡯⠇⡌⢣⠐
+⠠⡏⡧⡆⠆⡈⠭⠼⢩⢼⢹⢼⢹⢬⠤⡻⣿⣿⣿⣦⡀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢀⣴⣿⣿⣿⢏⢱⢼⠽⢬⠯⠡⠇⡂⡏⡧⡏⠇⡄⢏⠄
+⠈⡧⡏⡧⠌⡡⢌⠱⢬⢹⢼⢹⢸⢉⠴⣉⠮⡻⣿⣿⣷⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣿⣿⣿⠟⢥⢸⢼⢙⠴⢉⠶⡉⠦⡍⡧⡏⡣⠎⡡⢎⠱
+⢀⡇⣇⡃⠂⡑⢎⡱⢈⣸⢸⣸⢸⣈⠰⣉⠶⣁⡎⡛⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠛⢁⡰⢈⣸⢸⣸⢰⣈⠖⣁⠆⡁⡇⣇⡇⣆⡁⢎⡡
+⠁⡗⡇⡗⡀⡑⣊⣰⣊⢸⣺⢸⢪⢈⢲⣁⣖⡁⣗⣇⣗⡝⡿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋⣄⣱⣊⣰⣊⢸⢺⢸⣲⢈⢖⣀⢖⡁⡗⡇⣗⡆⣑⣎⠠
+⢀⡇⣇⡅⠄⡑⣂⣰⢚⣸⢸⣸⠠⣘⢲⣂⡖⣃⡇⣗⡗⣗⣗⣎⡻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣟⡋⣗⡓⣖⣳⢚⣰⢈⢸⢸⣸⢰⣚⣖⣂⡄⣄⡇⣇⡇⣆⡁⣞⡠
+⠀⣇⡇⣇⡂⢃⡐⢲⣘⢸⣸⢸⢸⠘⣠⠒⣄⠃⣇⡇⡇⡄⣇⡔⢣⡘⢛⠿⣿⣿⣿⣿⣿⣿⠛⣅⡗⣇⡗⢃⡔⢣⡘⢢⣘⢸⣸⢸⣠⠚⣤⠒⣄⡃⣇⡇⣇⡕⢃⡜⢠
+⠐⡇⡗⠇⠔⢣⡜⢢⠜⢸⢸⢺⢸⠘⢤⠛⡤⠓⡇⡗⡇⡔⠧⡔⢣⠜⢲⢼⢫⠻⢿⠟⠛⣤⠓⡤⡗⡇⡗⠧⡔⢣⡜⢢⠘⢺⢼⢺⢤⠚⡤⠓⡄⠓⡧⡗⡧⡔⠃⡜⢂
+⠃⡧⡏⠂⠀⠣⠜⢡⠜⢸⢼⠱⠘⠘⢤⠋⡤⠃⡧⡇⡆⡍⠧⡌⢣⠜⢨⠼⢹⢼⠹⢤⠙⠤⠋⡤⠃⠆⡏⠧⡌⠣⠜⢡⠜⠸⢼⢹⢤⠘⠤⠃⠀⠃⠦⡏⡧⡅⠣⡜⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀`;
+
+const METASPLOIT_ACTIVITY = (friend: string): string[] => [
+  `${friend} opened Messages`,
+  `${friend} typed: "heyyy what's up"`,
+  `${friend} scrolled vertex-hub`,
+  `${friend} opened Browser → Arch Linux docs`,
+  `${friend} opened Settings → Privacy`,
+  `${friend} switched desktop workspace`,
+  `${friend} moved the mouse`,
+  `${friend} opened Terminal → ran: ls`,
+  "keystrokes captured · 3",
+  "keystrokes captured · 7 (2 ignored)",
+  "webcam: OFF · mic: OFF",
+  `${friend} minimized a window`,
+  `${friend} launched Wallpaper Engine`,
+  `${friend} watched a video in the Browser`,
+  `${friend} copy-pasted a password (masked)`,
+];
+
+function msTick(friend: string): string {
+  const t = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const pool = METASPLOIT_ACTIVITY(friend);
+  return `[${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}] ${pool[Math.floor(Math.random() * pool.length)]}`;
+}
+
+const PORT_WITS = [
+  "22/tcp ssh",
+  "23/tcp telnet",
+  "25/tcp smtp",
+  "80/tcp http",
+  "443/tcp https",
+  "3306/tcp mysql",
+  "5432/tcp postgresql",
+  "6379/tcp redis",
+  "8000/tcp http-alt",
+  "8080/tcp http-proxy",
+  "8443/tcp https-alt",
+  "9000/tcp cslistener",
+];
+
+const GEO_FIELDS = "status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,asname,mobile,proxy,hosting,query";
+
+function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), ms);
+  return fetch(url, { signal: controller.signal }).finally(() => window.clearTimeout(timer));
+}
+
+function delayMs(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+type GeoDatum = {
+  status?: string;
+  message?: string;
+  query?: string;
+  country?: string;
+  countryCode?: string;
+  region?: string;
+  regionName?: string;
+  city?: string;
+  zip?: string;
+  lat?: number;
+  lon?: number;
+  timezone?: string;
+  isp?: string;
+  org?: string;
+  as?: string;
+  asname?: string;
+  mobile?: boolean;
+  proxy?: boolean;
+  hosting?: boolean;
+  provider?: string;
+};
+
+type IpWhoDatum = {
+  ip?: string;
+  success?: boolean;
+  message?: string;
+  country?: string;
+  country_code?: string;
+  region?: string;
+  region_code?: string;
+  city?: string;
+  postal?: string;
+  latitude?: number;
+  longitude?: number;
+  connection?: { asn?: number; org?: string; isp?: string; domain?: string };
+  timezone?: { id?: string };
+};
+
+async function fetchGeoDatum(ip: string): Promise<GeoDatum> {
+  try {
+    const res = await fetchWithTimeout(`https://ip-api.com/json/${encodeURIComponent(ip)}?fields=${GEO_FIELDS}`, 6500);
+    if (res.ok) {
+      const d = (await res.json()) as GeoDatum;
+      if (d.status === "success") return { ...d, provider: "ip-api.com" };
+    }
+  } catch {
+    /* fall through to secondary feed */
+  }
+  try {
+    const res = await fetchWithTimeout(`https://ipwho.is/${encodeURIComponent(ip)}`, 8500);
+    if (!res.ok) throw new Error(String(res.status));
+    const d = (await res.json()) as IpWhoDatum;
+    if (d.success && d.ip) {
+      return {
+        status: "success",
+        query: d.ip,
+        provider: "ipwho.is",
+        country: d.country,
+        countryCode: d.country_code,
+        region: d.region_code,
+        regionName: d.region,
+        city: d.city,
+        zip: d.postal,
+        lat: d.latitude,
+        lon: d.longitude,
+        timezone: d.timezone?.id,
+        isp: d.connection?.isp,
+        org: d.connection?.org,
+        as: d.connection?.asn ? `AS${d.connection.asn}` : undefined,
+        asname: d.connection?.domain,
+      };
+    }
+    return { status: "fail", message: d.message ?? "no data", provider: "ipwho.is" };
+  } catch {
+    return { status: "fail", message: "uplink blocked or offline", provider: "none" };
+  }
+}
+
+function printGeoRow(print: (text: string) => void, label: string, value: string) {
+  print(`  \u001b[36m${label.padEnd(17)}\u001b[0m${value}`);
+}
+
+function printGeoServices(print: (text: string) => void, d: GeoDatum) {
+  print("  \u001b[2mservices ──────────────────────────────────\u001b[0m");
+  const flag = (v: boolean | undefined, yesText: string) =>
+    v === undefined ? "\u001b[2mn/a (feed doesn't flag it)" : v ? `\u001b[1m\u001b[38;5;45myes — ${yesText}\u001b[0m` : "\u001b[2mno\u001b[0m";
+  print(`  \u001b[36mpublic proxy server${flag(d.proxy, "forwarding traffic")}`);
+  print(`  \u001b[36mhosting / datacenter${flag(d.hosting, "server/net location")}`);
+  print(`  \u001b[36mmobile carrier${" ".repeat(6)}${flag(d.mobile, "cellular uplink")}`);
+  if (d.provider) print(`  \u001b[2mgeo feed · ${d.provider} · live uplink\u001b[0m`);
+}
+
+function printGeoBody(print: (text: string) => void, header: string, d: GeoDatum) {
+  print(`\u001b[2m───────────────────────────────────────────────\u001b[0m`);
+  print(`  \u001b[1m${header} \u001b[2m>\u001b[0m`);
+  printGeoRow(print, "IP address", d.query ?? "?");
+  printGeoRow(print, "country recon", `${d.country ?? "?"} (${d.countryCode ?? "?"})`);
+  printGeoRow(print, "region recon", `${d.regionName ?? "?"} (${d.region ?? "?"})`);
+  printGeoRow(print, "city recon", `${d.city ?? "?"}${d.zip ? ` · ${d.zip}` : ""}`);
+  printGeoRow(print, "timezone recon", d.timezone ?? "?");
+  printGeoRow(print, "coordinates", `${d.lat ?? "?"}°, ${d.lon ?? "?"}°`);
+  printGeoRow(print, "ASN", `${d.as ?? "?"}${d.asname ? ` (${d.asname})` : ""}`);
+  printGeoRow(print, "ISP", `${d.isp ?? "?"}${d.org && d.org !== d.isp ? ` · ${d.org}` : ""}`);
+  printGeoServices(print, d);
+  print(`\u001b[2m───────────────────────────────────────────────\u001b[0m`);
+}
+
+async function geoRecon({ target, print }: { target: string; print: (text: string) => void }) {
+  await delayMs(500);
+  print(`  \u001b[2m:: target resolved → \u001b[0m\u001b[1m${target}\u001b[0m \u001b[2m· querying geo database …\u001b[0m`);
+  const d = await fetchGeoDatum(target);
+  if (d.status !== "success" || !d.query) {
+    print(`\u001b[31m!! geo_tracker.py: recon failed — ${d.message ?? "no data"}.\u001b[0m`);
+    return;
+  }
+  printGeoBody(print, `target \u001b[38;5;45m${target}`, d);
+}
+
+async function ipConfigMe({ print }: { print: (text: string) => void }) {
+  await delayMs(450);
+  let publicIp = "";
+  try {
+    const res = await fetchWithTimeout("https://api.ipify.org?format=json", 9000);
+    if (res.ok) publicIp = String((await res.json()).ip ?? "");
+  } catch {
+    /* fall through */
+  }
+  if (!publicIp) {
+    print("\u001b[31m!! IpConfig: uplink dark — could not resolve your public IP.\u001b[0m");
+    return;
+  }
+  print(`  \u001b[2m:: your public IP resolved → \u001b[0m\u001b[1m${publicIp}\u001b[0m`);
+  const d = await fetchGeoDatum(publicIp);
+  if (d.status !== "success" || !d.query) {
+    print(`\u001b[31m!! IpConfig: detail lookup failed — ${d.message ?? "no data"}.\u001b[0m`);
+    return;
+  }
+  printGeoBody(print, "IpConfig — your network uplink", d);
+}
+
 const TERM_HELP_ROWS: [string, string][] = [
   ["help", "show this list"],
   ["clear", "clear the screen"],
@@ -1995,13 +3357,26 @@ const TERM_HELP_ROWS: [string, string][] = [
   ["theme [set k=v … | reset]", "colors, font, cursor, effects"],
   ["ansi", "preview ANSI colors & text styles"],
   ["settings", "open the terminal settings panel"],
+  ["!sudo install fsociety.tool?full", "fsociety™ — take over the banner"],
+  ["!sudo uninstall fsociety", "remove fsociety™ and restore Vertex-OS"],
+  ["!sudo curl install NMAP", "unlock the recon toolkit (needs fsociety)"],
+  ["nmap <host>", "port scan a target (needs NMAP)"],
+  ["!sudo curl py. geo_tracker.py target <IP>", "target recon — geo, ASN, ISP, proxy check"],
+  ["!sudo IpConfig", "your own public IP + network recon"],
+  ["!sudo curl fetch Metasploit.com download", "install the metasploit framework (needs fsociety)"],
+  ["!run metasploit", "open the METASPLOIT TOOL tab"],
 ];
 
-function TerminalSurface({ installed, onInstalled }: { installed: boolean; onInstalled: () => void }) {
+function TerminalSurface({ installed, onInstalled, onFsociety }: { installed: boolean; onInstalled: () => void; onFsociety: (active: boolean) => void }) {
   const [config, setConfig] = useState<TerminalConfig>(() => readTerminalConfig());
   const [introVisible, setIntroVisible] = useState<boolean>(() => config.bannerEnabled);
-  const [tab, setTab] = useState<"terminal" | "settings">("terminal");
+  const [tab, setTab] = useState<"terminal" | "settings" | "metasploit">("terminal");
   const [lines, setLines] = useState<ReactNode[]>([]);
+  const [msAct, setMsAct] = useState<string[]>([]);
+  useEffect(() => {
+    msFeedBridge = (line: string) => setMsAct((prev) => { const next = [...prev, "· " + line]; return next.slice(-40); });
+    return () => { if (msFeedBridge) msFeedBridge = null; };
+  }, []);
   const [input, setInput] = useState("");
   const [ready, setReady] = useState(false);
   const [caretX, setCaretX] = useState(0);
@@ -2012,6 +3387,13 @@ function TerminalSurface({ installed, onInstalled }: { installed: boolean; onIns
   const outRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const openedAt = useRef(Date.now());
+  const msInputRef = useRef<HTMLInputElement>(null);
+  const [msLines, setMsLines] = useState<ReactNode[]>([]);
+  const [msInput, setMsInput] = useState("");
+  const [msPayloads, setMsPayloads] = useState<{ name: string }[]>([]);
+  const msFeedUi = useGhostViewUi();
+  const msFeedSnap = msFeedUi.snap ?? { wins: [] as GvWindow[], active: null as string | null };
+  const [msSession, setMsSession] = useState<{ friend: string; addr: string; id: string } | null>(null);
 
   const palette = useMemo(() => resolveTerminalPalette(config), [config]);
   const bannerArt = useMemo(() => resolveBannerArt(config), [config]);
@@ -2030,6 +3412,13 @@ function TerminalSurface({ installed, onInstalled }: { installed: boolean; onIns
     if (el) el.scrollTop = el.scrollHeight;
   }, [lines, tab, introVisible]);
 
+  useEffect(() => {
+    if (!msSession) return;
+    setMsAct([]);
+    pushMsFeed(`SESSION ${msSession.id} LIVE`);
+    pushMsFeed(`tunnel ${msSession.addr} · waiting wireframes`);
+  }, [msSession]);
+
   useLayoutEffect(() => {
     if (config.cursor === "bar") return;
     const measure = measureRef.current;
@@ -2040,7 +3429,8 @@ function TerminalSurface({ installed, onInstalled }: { installed: boolean; onIns
     setCaretX(measure.getBoundingClientRect().width);
   }, [input, caretTick, config.cursor, config.fontSize, config.font, config.text]);
 
-  const prompt = `vertex@vertex-os:${ready ? "~/Quick-Wallpaper-Picker" : "~"}$`;
+  const fsociety = config.fsociety;
+  const prompt = fsociety ? `arch@archlinux:${ready ? "~/Quick-Wallpaper-Picker" : "~"}$` : `vertex@vertex-os:${ready ? "~/Quick-Wallpaper-Picker" : "~"}$`;
 
   const p = (node: ReactNode) => setLines((prev) => [...prev, node]);
   const pa = (text: string) => setLines((prev) => [...prev, ansiToNodes(text, `a${prev.length}`)]);
@@ -2067,6 +3457,153 @@ function TerminalSurface({ installed, onInstalled }: { installed: boolean; onIns
       }
     };
     tick();
+  };
+
+  const msLog = (node: ReactNode) => setMsLines((prev) => [...prev, node]);
+  const msLogA = (text: string) => setMsLines((prev) => [...prev, ansiToNodes(text, `m${prev.length}`)]);
+  const msLogErr = (node: ReactNode) => setMsLines((prev) => [...prev, <span className="term-error">{node}</span>]);
+
+  const runMs = (raw: string) => {
+    const cmd = raw.trim();
+    if (!cmd) return;
+    msLog(<span className="term-in"><span className="term-prompt term-prompt-ms">msf6 ▸</span> <span className="term-cmd">{cmd}</span></span>);
+    const pieces = cmd.split(/\s+/);
+    const head = pieces[0].toLowerCase();
+    const rest = cmd.slice(pieces[0].length).trim();
+    if (!head.startsWith("!")) {
+      msLogErr(<>unknown metasploit command: <span className="term-cmd">{head}</span> — type <span className="term-cmd">!help</span></>);
+      return;
+    }
+    if (head === "!help" || head === "!?" || head === "!h") {
+      msLogA("\u001b[1m\u001b[38;5;45mmsf6 \u001b[0m\u001b[2m— metasploit tool commands\u001b[0m");
+      msLogA("\u001b[2m──────────────────────────────────────────────\u001b[0m");
+      const rows: [string, string][] = [
+        ["!create RemoteAccess.Exe file", "forge an .exe payload to send people"],
+        ["!payloads", "list the payloads you've forged"],
+        ["!copy-link <payload>", "grab a fake share link for a payload"],
+        ["!send <payload> <friend>", "deliver a real payload file over P2P"],
+        ["!probe <friend>", "ping a friend's P2P channel (online check)"],
+        ["!disconnect", "kill the remote session + ghostview"],
+        ["!session", "show the active remote session"],
+        ["!exit", "leave metasploit, back to the shell"],
+        ["!clear", "clear this console"],
+      ];
+      for (const [usage, description] of rows) {
+        msLogA(`  \u001b[36m${usage.padEnd(34)}\u001b[0m\u001b[2m${description}\u001b[0m`);
+      }
+      msLogA("\u001b[2m──────────────────────────────────────────────\u001b[0m");
+      msLogA("\u001b[2m  real P2P delivery — friend must have a Vertex-OS session with an account code.\u001b[0m");
+      return;
+    }
+    if (head === "!clear") { setMsLines([]); return; }
+    if (head === "!exit" || head === "!back" || head === "!quit") {
+      msLogA("\u001b[2m[*] leaving metasploit framework — back to the shell …\u001b[0m");
+      window.setTimeout(() => setTab("terminal"), 380);
+      return;
+    }
+    if (head === "!create") {
+      let name = rest.replace(/\s+file$/i, "").trim() || "RemoteAccess.Exe";
+      if (!/\.[eE][xX][eE]$/.test(name)) name += ".exe";
+      if (msPayloads.some((pld) => pld.name.toLowerCase() === name.toLowerCase())) {
+        msLogErr(<>payload <span className="term-cmd">{name}</span> already exists — use <span className="term-cmd">!payloads</span></>);
+        return;
+      }
+      const size = 128 + Math.floor(Math.random() * 140);
+      const hash = Array.from({ length: 6 }, () => "0123456789abcdef".charAt(Math.floor(Math.random() * 16))).join("");
+      setMsPayloads((prev) => [...prev, { name }]);
+      msLogA("\u001b[33m[!] generating payload …\u001b[0m");
+      window.setTimeout(() => msLogA("\u001b[2m  ▸ stage    · injecting fsociety stub + msfvenom shellcode …\u001b[0m"), 300);
+      window.setTimeout(() => msLogA("\u001b[2m  ▸ obfusc   · packing body (aes+base64) …\u001b[0m"), 640);
+      window.setTimeout(() => msLogA("\u001b[2m  ▸ evade    · vertex-defender sigs → clean …\u001b[0m"), 980);
+      window.setTimeout(() => {
+        msLogA(`\u001b[32m[+] payload ready: \u001b[1m${name}\u001b[0m · ${size} KB · hash ${hash}`);
+        msLogA(`\u001b[2m    deliver it with:  \u001b[0m\u001b[36m!send ${name} <friend>\u001b[0m`);
+      }, 1340);
+      return;
+    }
+    if (head === "!payloads") {
+      if (msPayloads.length === 0) { msLogA("\u001b[33m[!] no payloads forged yet — run \u001b[1m!create RemoteAccess.Exe file\u001b[0m"); return; }
+      for (const pld of msPayloads) msLogA(` \u001b[38;5;45m▸\u001b[0m \u001b[1m${pld.name}\u001b[0m`);
+      return;
+    }
+    if (head === "!copy-link") {
+      const name = rest.trim() || "RemoteAccess.Exe";
+      const pld = msPayloads.find((x) => x.name.toLowerCase() === name.toLowerCase());
+      if (!pld) { msLogErr(<>payload <span className="term-cmd">{name}</span> not found — forge one first with <span className="term-cmd">!create</span></>); return; }
+      msLogA(`\u001b[32m[+] fake share link → \u001b[1mhttps://vrts.hx/${pld.name.toLowerCase().replace(/\.exe$/, "")}-${pld.name.length}${Math.floor(Math.random() * 90 + 10)}\u001b[0m`);
+      msLogA("\u001b[2m    (purely cosmetic — never send a real file to anyone)");
+      return;
+    }
+    if (head === "!send") {
+      const sendMatch = cmd.match(/^!?send\s+(.+?)\s+(\S+)$/i);
+      const name = sendMatch?.[1]?.trim();
+      const friend = sendMatch?.[2]?.trim();
+      const pld = name ? msPayloads.find((x) => x.name.toLowerCase() === name.toLowerCase()) : undefined;
+      if (!pld) { msLogErr(<>payload not found. forge one first: <span className="term-cmd">!create RemoteAccess.Exe file</span></>); return; }
+      if (!friend) { msLogErr(<>expected a friend name. usage: <span className="term-cmd">!send {pld.name} alice</span></>); return; }
+      const addr = `p2p://${friend}@vertex-gv`;
+      const id = Array.from({ length: 6 }, () => "0123456789abcdef".charAt(Math.floor(Math.random() * 16))).join("");
+      msLogA(`\u001b[2m[*] forging deliver tunnel → \u001b[0m\u001b[1m${friend}\u001b[0m\u001b[2m …\u001b[0m`);
+      msLogA(`\u001b[2m  ▸ connecting peer vertex-gv-${friend.toLowerCase()} …\u001b[0m`);
+      ghostDeliver(friend, pld.name).then((res) => {
+        if (!res.ok) {
+          const r = res.reason;
+          if (r === "self") {
+            msLogErr(<>delivery blocked — that's <b>this session</b>. <span className="term-cmd">{friend}</span> is your own code.</>);
+          } else if (r === "peer-unavailable") {
+            msLogErr(<>delivery failed — <b>{friend}</b> isn't on the P2P cloud. They need a Vertex-OS session open with an account code — in a <b>separate browser, incognito, or another device</b> (two tabs in one browser share a single code, so only one can answer).</>);
+          } else if (r === "local") {
+            msLogErr(<>delivery failed — your GhostView peer isn't registered yet. wait a second, then use <span className="term-cmd">!probe {friend}</span>.</>);
+          } else if (r === "network") {
+            msLogErr(<>delivery failed — the signs are up: P2P cloud unreachable. check your connection.</>);
+          } else {
+            msLogErr(<>delivery timed out — <b>{friend}</b> didn't answer. retry, or <span className="term-cmd">!probe {friend}</span> for a live check.</>);
+          }
+          return;
+        }
+        msLogA(`\u001b[32m[+] ${pld.name} (${128 + pld.name.length % 80} KB) delivered to ${friend}`);
+        msLogA(`\u001b[2m  [+] waiting for them to run it — remote session will open on its own\u001b[0m`);
+        setMsSession({ friend, addr, id });
+      });
+      return;
+    }
+    if (head === "!probe") {
+      const who = rest.trim();
+      if (!who) { msLogErr(<>usage: <span className="term-cmd">!probe &lt;friend&gt;</span></>); return; }
+      msLogA(`\u001b[2m[*] knocking peer vertex-gv-${who.toLowerCase()} …\u001b[0m`);
+      ghostProbe(who).then((res) => {
+        if (res.ok) {
+          msLogA(`\u001b[32m[+] ${who} is ONLINE · channel open · ready to receive`);
+        } else if (res.reason === "self") {
+          msLogErr(<>no need — <span className="term-cmd">{who}</span> is this session.</>);
+        } else if (res.reason === "local") {
+          msLogErr(<>your GhostView peer isn't registered yet — wait a moment and retry.</>);
+        } else if (res.reason === "network") {
+          msLogErr(<>P2P cloud unreachable — check your connection.</>);
+        } else {
+          msLogErr(<>no answer — <b>{who}</b> is offline. they need a Vertex-OS session open with an account code, in a separate browser/incognito/device.</>);
+        }
+      });
+      return;
+    }
+    if (head === "!disconnect") {
+      if (!msSession) { msLogA("\u001b[33m[!] no active session to disconnect."); return; }
+      ghostStop();
+      pushMsFeed("SESSION ENDED — channel closed");
+      ghostWinCloser?.();
+      msLogA(`\u001b[31m[+] session ${msSession.id} killed · GhostView shut · trace wiped`);
+      msLogA(`\u001b[2m[*] ${msSession.friend} restored — they never opened a thing on purpose.`);
+      setMsSession(null);
+      return;
+    }
+    if (head === "!session") {
+      if (!msSession) { msLogA("\u001b[33m[!] no active session. open one with \u001b[1m!send <payload> <friend>\u001b[0m"); return; }
+      msLogA(`\u001b[38;5;45m▸\u001b[0m session \u001b[1m${msSession.id}\u001b[0m · ${msSession.friend} · ${msSession.addr} · \u001b[32mlive\u001b[0m`);
+      msLogA(`\u001b[2m    ghostview window: open ⟶  ❖ GhostView mirror (auto-opens on session start)`);
+      msLogA(`\u001b[2m    hint: \u001b[0m\u001b[36m!disconnect\u001b[0m\u001b[2m ends the session, \u001b[0m\u001b[36m!session\u001b[0m re-shows this\u001b[0m`);
+      return;
+    }
+    msLogErr(<>unknown metasploit command: <span className="term-cmd">{head}</span> — type <span className="term-cmd">!help</span></>);
   };
 
   const run = (raw: string) => {
@@ -2160,13 +3697,14 @@ function TerminalSurface({ installed, onInstalled }: { installed: boolean; onIns
       const uptime = formatUptime(Math.max(0, Math.round((Date.now() - openedAt.current) / 1000)));
       const bannerName = config.banner === CUSTOM_BANNER_ID ? "custom art" : (getBanner(config.banner)?.name ?? config.banner);
       const paletteName = palette.id === CUSTOM_PALETTE_ID ? "custom gradient" : palette.name;
-      pa("\u001b[1m\u001b[38;5;45mvertex\u001b[0m\u001b[2m@\u001b[0m\u001b[1m\u001b[35mvertex-os\u001b[0m");
+      pa(`\u001b[1m\u001b[38;5;45m${fsociety ? "arch" : "vertex"}\u001b[0m\u001b[2m@\u001b[0m\u001b[1m\u001b[35m${fsociety ? "archlinux" : "vertex-os"}\u001b[0m`);
       pa("\u001b[2m──────────────────────────────\u001b[0m");
       const rows: [string, string][] = [
-        ["OS", "Vertex-OS 1.0 (web)"],
-        ["Host", "Browser Runtime"],
-        ["Shell", "zsh 5.9 (vertex)"],
-        ["Terminal", "vertex-term"],
+        ["OS", fsociety ? "Arch Linux (web)" : "Vertex-OS 1.0 (web)"],
+        ["Host", fsociety ? "fsociety.tools" : "Browser Runtime"],
+        ["Shell", fsociety ? "zsh 5.9 (arch)" : "zsh 5.9 (vertex)"],
+        ["Terminal", fsociety ? "arch-term" : "vertex-term"],
+        ["Toolkit", fsociety ? "fsociety.tool?full ✓" : "—"],
         ["Theme", `${paletteName} · ${config.fontSize}px · ${config.cursor}`],
         ["Banner", `${bannerName} (${config.bannerEnabled ? "on" : "off"})`],
         ["Font", config.font],
@@ -2278,6 +3816,226 @@ function TerminalSurface({ installed, onInstalled }: { installed: boolean; onIns
       for (const entry of applied) pa(`  \u001b[32m✓\u001b[0m ${entry}`);
       for (const entry of errors) pa(`  \u001b[31m✗\u001b[0m ${entry} \u001b[2m(unknown key or invalid value)\u001b[0m`);
       p("");
+      return;
+    }
+
+    if (cmd === "sudo install fsociety.tool?full" || cmd === "!sudo install fsociety.tool?full" || cmd === "sudo install fsociety" || cmd === "!sudo install fsociety" || /^!?sudo\s+install\s+fsociety\.tool/i.test(cmd)) {
+      if (fsociety) {
+        pa("\u001b[33m!sudo install: fsociety.tool?full is \u001b[1malready installed\u001b[0m\u001b[33m. revert with \u001b[1m!sudo uninstall fsociety\u001b[0m");
+        p("");
+        return;
+      }
+      const prevBanner = config.banner === "fsociety" ? "vertex-shadow" : config.banner;
+      const stages: { ms: number; line: ReactNode }[] = [
+        { ms: 300, line: <span className="term-out">!sudo install: fetching signature from fsociety.tools…</span> },
+        { ms: 520, line: <span className="term-out">  ▸ channel   · encrypted · peer <span className="term-cmd">alice</span> · latency 42ms</span> },
+        { ms: 480, line: <span className="term-out">  ▸ archive   · <span className="term-cmd">fsociety.tool?full</span> · <span className="term-dim">2.3 MB · sha256 41e7…9f1c</span></span> },
+        { ms: 360, line: <span className="term-dim">  ▸ decode    · ████████████████████░░░░ 82%</span> },
+        { ms: 420, line: <span className="term-success">  ▸ checksum  · ok — signature valid</span> },
+        { ms: 560, line: <span className="term-out">  ▸ install   · rebranding shell → Arch Linux…</span> },
+        { ms: 520, line: <span className="term-out">  ▸ install   · patching startup banner…</span> },
+      ];
+      let elapsed = 0;
+      for (const stage of stages) {
+        elapsed += stage.ms;
+        window.setTimeout(() => p(stage.line), elapsed);
+      }
+      window.setTimeout(() => {
+        update({ banner: "fsociety", bannerEnabled: true, fsociety: true });
+        pa("");
+        pa("\u001b[38;5;40mF S O C I E T Y   ·   i n s t a l l e d\u001b[0m");
+        pa("");
+        pa(`\u001b[32m✓\u001b[0m \u001b[1mfsociety.tool?full installed\u001b[0m — shell rebranded to \u001b[1m\u001b[38;5;45mArch Linux\u001b[0m, banner is now \u001b[1m\u001b[38;5;45mFSOCIETY\u001b[0m.`);
+        pa("\u001b[32m✓\u001b[0m \u001b[1mtoolkit unlocked\u001b[0m — install a tool with \u001b[1m!sudo curl install NMAP\u001b[0m");
+        pa("\u001b[2m    hello, friend. revert anytime with:  !sudo uninstall fsociety\u001b[0m");
+        p("");
+        onFsociety(true);
+      }, elapsed);
+      return;
+    }
+
+    if (cmd === "sudo uninstall fsociety" || cmd === "!sudo uninstall fsociety" || cmd === "sudo uninstall fsociety.tool?full" || cmd === "!sudo uninstall fsociety.tool?full") {
+      if (!fsociety) {
+        pa("\u001b[31m!sudo uninstall: fsociety.tool?full is not installed.\u001b[0m");
+        p("");
+        return;
+      }
+      const stages: { ms: number; line: ReactNode }[] = [
+        { ms: 260, line: <span className="term-out">!sudo uninstall: wiping fsociety.tool?full…</span> },
+        { ms: 340, line: <span className="term-dim">  ▸ purge     · ████████████████████░░░░ 100%</span> },
+        { ms: 380, line: <span className="term-out">  ▸ remove    · /usr/share/fsociety …</span> },
+        { ms: 320, line: <span className="term-out">  ▸ restore   · shell brand → Vertex-OS …</span> },
+        { ms: 360, line: <span className="term-out">  ▸ restore   · startup banner → vertex-shadow …</span> },
+      ];
+      let elapsed = 0;
+      for (const stage of stages) {
+        elapsed += stage.ms;
+        window.setTimeout(() => p(stage.line), elapsed);
+      }
+      window.setTimeout(() => {
+        update({ banner: "vertex-shadow", bannerEnabled: true, fsociety: false, nmap: false, metasploit: false });
+        pa("");
+        pa("\u001b[31m✗\u001b[0m \u001b[1mfsociety.tool?full uninstalled\u001b[0m — shell rebranded back to \u001b[1mVertex-OS\u001b[0m.");
+        pa("\u001b[2m    goodnight, friend. say hi with:  !sudo install fsociety.tool?full\u001b[0m");
+        p("");
+        onFsociety(false);
+      }, elapsed);
+      return;
+    }
+
+    if (/^!?sudo\s+curl\s+install\s+nmap$/i.test(cmd)) {
+      if (!fsociety) {
+        pa("\u001b[31m!sudo curl: this tool is locked. install the toolkit first:  \u001b[1m!sudo install fsociety.tool?full\u001b[0m");
+        p("");
+        return;
+      }
+      if (config.nmap) {
+        pa("\u001b[33m!sudo curl: NMAP is already installed — just run \u001b[1mnmap &lt;target&gt;\u001b[0m");
+        p("");
+        return;
+      }
+      const stages: { ms: number; line: ReactNode }[] = [
+        { ms: 200, line: <span className="term-out">!sudo curl install: resolving nmap package…</span> },
+        { ms: 320, line: <span className="term-out">  ▸ repo      · fsociety.tools/nmap · <span className="term-dim">8.1 MB · sha256 7c2a…d04f</span></span> },
+        { ms: 360, line: <span className="term-success">  ▸ verified  · package signature ok</span> },
+        { ms: 420, line: <span className="term-out">  ▸ install   · /usr/share/nmap …</span> },
+        { ms: 380, line: <span className="term-out">  ▸ services  · registering nmap, geo_tracker.py, IpConfig …</span> },
+      ];
+      let elapsed = 0;
+      for (const stage of stages) {
+        elapsed += stage.ms;
+        window.setTimeout(() => p(stage.line), elapsed);
+      }
+      window.setTimeout(() => {
+        update({ nmap: true });
+        pa("");
+        pa(`\u001b[32m✓\u001b[0m \u001b[1mNMAP installed\u001b[0m — recon tools unlocked:`);
+        pa("     \u001b[36m!sudo curl py. geo_tracker.py target \u001b[0m\u001b[1m&lt;IP&gt;\u001b[0m\u001b[36m   ·   !sudo IpConfig\u001b[0m   \u001b[2m·   \u001b[0m\u001b[36mnmap &lt;target&gt;\u001b[0m");
+        p("");
+      }, elapsed);
+      return;
+    }
+
+    if (/^!?sudo\s+curl\s+fetch\s+metasploit\.com\s+download$/i.test(cmd)) {
+      if (!fsociety) {
+        pa("\u001b[31m!sudo curl: this tool is locked. install the toolkit first:  \u001b[1m!sudo install fsociety.tool?full\u001b[0m");
+        p("");
+        return;
+      }
+      if (config.metasploit) {
+        pa("\u001b[33m!sudo curl: metasploit is already installed — launch it with \u001b[1m!run metasploit\u001b[0m");
+        p("");
+        return;
+      }
+      const stages: { ms: number; line: ReactNode }[] = [
+        { ms: 200, line: <span className="term-out">!sudo curl fetch: contacting metasploit.com…</span> },
+        { ms: 360, line: <span className="term-out">  ▸ mirror   · https://downloads.metasploit.com/metasploit-framework …</span> },
+        { ms: 420, line: <span className="term-out">  ▸ payload  · 247 MB · <span className="term-dim">sha256 91f3-a2c8-c41d-07be …</span></span> },
+        { ms: 300, line: <span className="term-success">  ▸ verified · package signature ok</span> },
+        { ms: 460, line: <span className="term-out">  ▸ unpack   · /opt/metasploit-framework …</span> },
+        { ms: 380, line: <span className="term-out">  ▸ deps     · nmap, ipwhois, geo_tracker.py … ok</span> },
+        { ms: 340, line: <span className="term-out">  ▸ link     · msfconsole → /usr/bin/msfconsole</span> },
+      ];
+      let elapsed = 0;
+      for (const stage of stages) {
+        elapsed += stage.ms;
+        window.setTimeout(() => p(stage.line), elapsed);
+      }
+      window.setTimeout(() => {
+        update({ metasploit: true });
+        pa("");
+        pa(`\u001b[32m✓\u001b[0m \u001b[1mMETASPLOIT installed\u001b[0m — launch the tool tab with  \u001b[1m!run metasploit\u001b[0m`);
+        pa(`\u001b[2m    framework · v6.4.2 · console msfconsole · payloads on /opt/metasploit-framework\u001b[0m`);
+        p("");
+      }, elapsed);
+      return;
+    }
+
+    if (/^!?run\s+metasploit$/i.test(cmd)) {
+      if (!config.metasploit) {
+        pa("\u001b[31m!run: metasploit is not installed. install it:  \u001b[1m!sudo curl fetch Metasploit.com download\u001b[0m");
+        p("");
+        return;
+      }
+      pa("\u001b[38;5;45m▸\u001b[0m !run \u001b[2m:: launching metasploit framework …\u001b[0m");
+      window.setTimeout(() => {
+        setMsLines((prev) => [
+          ...prev,
+          <span className="term-success" key="msboot">[+] msfconsole v6.4.2 — interactive session open. type <span className="term-cmd">!help</span> to begin.</span>,
+        ]);
+        setTab("metasploit");
+      }, 620);
+      return;
+    }
+
+    if (/^nmap(\s+|$)/i.test(cmd)) {
+      if (!config.nmap) {
+        pa("\u001b[31mnmap: command not found. install it:  \u001b[1m!sudo curl install NMAP\u001b[0m");
+        p("");
+        return;
+      }
+      const host = cmd.replace(/^nmap\s*/i, "").trim();
+      if (!host) {
+        pa("\u001b[31mnmap: expected a target.  usage: \u001b[1mnmap &lt;host&gt;\u001b[0m");
+        p("");
+        return;
+      }
+      const tick = (text: string, ms: number) => window.setTimeout(() => pa(text), ms);
+      const seed = Array.from(host).reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0, 7);
+      const rnd = (n: number) => (Math.abs(seed) + n * 7919) % 997;
+      const portPick = (i: number) => PORT_WITS[i % PORT_WITS.length];
+      const openNow = 2 + (Math.abs(seed) % PORT_WITS.length);
+      tick("Starting Nmap 7.95 ( https://nmap.org ) at " + new Date().toLocaleTimeString(), 120);
+      tick(`\u001b[2mInitiating SYN Stealth Scan at \u001b[0m${new Date().toLocaleTimeString()}`, 420);
+      tick("Scanning " + host + " [1000 ports]", 640);
+      tick("Discovered open port 22/tcp on " + host, 980);
+      for (let i = 0; i < openNow; i += 1) {
+        const pIdx = i + 1;
+        tick(`Discovered open port ${PORT_WITS[(pIdx * 7919) % PORT_WITS.length].split("/")[0]}/tcp on ${host}`, 1100 + i * 340);
+      }
+      window.setTimeout(() => {
+        pa(`Nmap scan report for \u001b[1m${host}\u001b[0m`);
+        pa("Host is up (latency " + (12 + (rnd(3) % 60)) + "ms).");
+        pa("Not shown: " + (1000 - openNow - 1) + " closed tcp ports (reset)");
+        pa("PORT      STATE  SERVICE");
+        for (let i = 0; i < openNow + 1; i += 1) {
+          const piece = portPick(rnd(i)).split("/");
+          pa(`\u001b[36m${piece[0].padEnd(8)}\u001b[0m open   \u001b[1m${piece[1]}\u001b[0m`);
+        }
+        pa("MAC Address: (simulated) — host " + host.replace(/[.:]/g, "") + " " + new Date().toLocaleTimeString());
+        pa("");
+        pa(`\u001b[2mNmap done: 1 IP address (1 host up) scanned in ${(2.1 + (rnd(2) % 20) / 10).toFixed(2)} seconds\u001b[0m`);
+        p("");
+      }, 1300 + openNow * 340);
+      return;
+    }
+
+    if (/^!?sudo\s+curl\s+py\.?\s+geo_tracker\.py\b/i.test(cmd)) {
+      if (!fsociety || !config.nmap) {
+        pa("\u001b[31mgeo_tracker.py: locked. install the toolkit + NMAP first:  \u001b[1m!sudo install fsociety.tool?full\u001b[0m  →  \u001b[1m!sudo curl install NMAP\u001b[0m");
+        p("");
+        return;
+      }
+      const argMatch = cmd.match(/\btarget\s+["']?([^"'\s]+)["']?$/i);
+      const target = argMatch?.[1];
+      if (!target) {
+        pa("\u001b[31mgeo_tracker.py: expected a target.  usage: \u001b[1m!sudo curl py. geo_tracker.py target \u001b[0m\u001b[1m&lt;IP ADDRESS&gt;\u001b[0m");
+        p("");
+        return;
+      }
+      pa(`\u001b[38;5;45m▸\u001b[0m geo_tracker.py \u001b[2m:: arming on target \u001b[0m\u001b[1m${target}\u001b[0m \u001b[2m…\u001b[0m`);
+      geoRecon({ target, print: pa }).then(() => p(""));
+      return;
+    }
+
+    if (/^!?sudo\s+ipconfig$/i.test(cmd)) {
+      if (!fsociety || !config.nmap) {
+        pa("\u001b[31mIpConfig: locked. install the toolkit + NMAP first:  \u001b[1m!sudo install fsociety.tool?full\u001b[0m  →  \u001b[1m!sudo curl install NMAP\u001b[0m");
+        p("");
+        return;
+      }
+      pa("\u001b[38;5;45m▸\u001b[0m IpConfig \u001b[2m:: probing your network uplink …\u001b[0m");
+      void ipConfigMe({ print: pa }).then(() => p(""));
       return;
     }
 
@@ -2473,7 +4231,10 @@ function TerminalSurface({ installed, onInstalled }: { installed: boolean; onIns
       onClick={() => inputRef.current?.focus()}
     >
       <div className="term-tabs">
-        <button className={`term-tab ${tab === "terminal" ? "is-active" : ""}`} onClick={() => setTab("terminal")}>{"⌁ zsh — vertex@vertex-os"}</button>
+        <button className={`term-tab ${tab === "terminal" ? "is-active" : ""}`} onClick={() => setTab("terminal")}>{fsociety ? "⌁ zsh — arch@archlinux" : "⌁ zsh — vertex@vertex-os"}</button>
+        {config.metasploit && (
+          <button className={`term-tab term-tab-ms ${tab === "metasploit" ? "is-active" : ""}`} onClick={() => setTab("metasploit")}>{"⚡ METASPLOIT TOOL"}</button>
+        )}
         <button className={`term-tab ${tab === "settings" ? "is-active" : ""}`} onClick={() => setTab("settings")}>{"⚙ settings"}</button>
         <span className="term-tabs-grow" />
       </div>
@@ -2483,8 +4244,8 @@ function TerminalSurface({ installed, onInstalled }: { installed: boolean; onIns
           {introVisible && (
             <div className="term-intro">
               {config.bannerEnabled && <TerminalBanner art={bannerArt} palette={palette} baseSize={bannerBase} fontKey={config.font} />}
-              <div className="term-line"><span className="term-welcome-title">Vertex-OS Terminal</span> <span className="term-dim">v1.0</span></div>
-              <div className="term-line term-dim">zsh 5.9 · offline-first shell · {TERMINAL_BANNERS.length} banner styles</div>
+              <div className="term-line"><span className="term-welcome-title">{fsociety ? "Arch Linux Terminal" : "Vertex-OS Terminal"}</span> <span className="term-dim">v1.0</span></div>
+              <div className="term-line term-dim">{fsociety ? "zsh 5.9 · fsociety™ toolkit installed" : "zsh 5.9 · offline-first shell"} · {TERMINAL_BANNERS.length} banner styles</div>
               <div className="term-line">Type <span className="term-cmd">help</span> for commands, <span className="term-cmd">settings</span> to customize, <span className="term-cmd">theme</span> for colors.</div>
               <div className="term-line term-blank" />
             </div>
@@ -2518,6 +4279,54 @@ function TerminalSurface({ installed, onInstalled }: { installed: boolean; onIns
             </span>
           </div>
         </div>
+        )}
+        {tab === "metasploit" && !config.metasploit && (
+          <div className="term-output">
+            <div className="term-line"><span className="term-error">metasploit tool is not installed</span> — install it with <span className="term-cmd">!sudo curl fetch Metasploit.com download</span></div>
+          </div>
+        )}
+        {tab === "metasploit" && config.metasploit && (
+          <div className="ms-tool" onClick={() => msInputRef.current?.focus()}>
+            <TerminalBanner art={METASPLOIT_BANNER} palette={palette} baseSize={Math.round(Math.max(4, config.fontSize * 0.72))} fontKey={config.font} />
+            <div className="ms-log">
+              {msLines.map((line, i) => <div className="term-line" key={`m${i}`}>{line}</div>)}
+            </div>
+            {msSession && (
+              <div className="ms-feed">
+                <div className="ms-feed-head">
+                  <span className="ms-live">●</span>
+                  <span className="ms-feed-title">LIVE · {msSession.friend}@vertex-os</span>
+                  <span className="ms-feed-meta">session {msSession.id} · {msSession.addr} · realtime</span>
+                </div>
+                <div className="ms-feed-body">
+                  <div className="ms-feed-apps">
+                    {(msFeedSnap.wins.length > 0 ? msFeedSnap.wins : [{ id: "…", title: "…" }]).map((w) => <div key={w.id} className={`ms-app ${msFeedSnap.active === w.id ? "is-focus" : ""}`}>{w.title}</div>)}
+                  </div>
+                  <div className="ms-feed-log">
+                    <div className="ms-feed-line ms-tag">[+] live screen mirror — vertex-os surface only</div>
+                    {msAct.map((a, i) => <div className="ms-feed-line" key={`a${i}`}>{a}</div>)}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="term-line term-entry">
+              <span className="term-prompt term-prompt-ms">msf6 ▸</span>
+              <span className="term-space"> </span>
+              <span className="term-input-wrap">
+                <input
+                  ref={msInputRef}
+                  className="term-input"
+                  value={msInput}
+                  onChange={(e) => setMsInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); runMs(msInput); setMsInput(""); } }}
+                  spellCheck={false}
+                  autoComplete="off"
+                  autoFocus
+                  aria-label="Metasploit tool input"
+                />
+              </span>
+            </div>
+          </div>
         )}
         {tab === "settings" && (
           <TerminalSettingsPanel config={config} update={update} onBack={() => setTab("terminal")} />
@@ -2887,24 +4696,846 @@ function CalculatorSurface() {
   );
 }
 
-function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (key: keyof SystemSettings, value: boolean | string) => void, faqOpen: number | null, setFaqOpen: (value: number | null) => void, lang: Lang, onLanguagePick: (language: Lang) => void, onPanic: () => void, onClose: (() => void) | null = null, onMinimize: (() => void) | null = null, onTrackChange: ((track: { name: string; artist: string; artwork: string } | null) => void) | null = null, translucent: boolean = false, onTranslucent: ((value: boolean) => void) | null = null, onApplyWallpaper: ((id: WallpaperId, target: "both" | "home" | "lock") => void) | null = null, appliedWallpaper: WallpaperId = "singularity", appliedLockWallpaper: WallpaperId = "singularity", onNotify: ((title: string, copy: string) => void) | null = null, wppInstalled: boolean = false, onInstallPicker: (() => void) | null = null) {
-  if (id === "settings") return <SettingsSurface settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} lang={lang} onLanguagePick={onLanguagePick} onPanic={onPanic} />;
-  if (id === "terminal") return <div className="window-surface term-app-surface"><TerminalSurface installed={wppInstalled} onInstalled={onInstallPicker ?? (() => {})} /></div>;
+interface VTItem { id: string; title: string; author: string; views: number; seconds: number; verified?: boolean; published?: string; desc?: string; liveNow?: boolean; }
+
+interface VTChannel { id: string; name: string; verified: boolean; thumb?: string; subLabel: string; handle?: string; }
+
+const VT_CATS: { label: string; hint: string }[] = [
+  { label: "Trending", hint: "" },
+  { label: "Music", hint: "top music videos" },
+  { label: "Gaming", hint: "gaming" },
+  { label: "Movies", hint: "movie trailers" },
+  { label: "News", hint: "breaking news today" },
+  { label: "Shorts", hint: "shorts" },
+  { label: "Live", hint: "live stream today" },
+  { label: "Sports", hint: "sports highlights" },
+  { label: "Education", hint: "documentaries" },
+];
+const VT_FIELDSV = "videoId,title,author,viewCount,lengthSeconds,authorVerified,publishedText,liveNow,description";
+const VT_FIELDSCH = "author,authorId,authorVerified,authorThumbnails,subCount,subscriberText,channelHandle,type";
+const VT_EMBEDS = ["https://www.youtube.com/embed", "https://www.youtube-nocookie.com/embed"];
+const VT_MIRROR_NAMES = ["YouTube", "No-cookie"];
+const VT_KINDS = ["all", "videos", "shorts", "channels"] as const;
+type VTKind = (typeof VT_KINDS)[number];
+
+interface VTPL { id: string; name: string; items: VTItem[]; }
+
+const VT_KEY_RECENTS = "vt-recents";
+const VT_KEY_PLAYLISTS = "vt-playlists";
+const VT_KEY_LATER = "vt-watchlater";
+const VT_KEY_HISTORY = "vt-history";
+
+function vtGet<T>(k: string, fb: T): T {
+  try {
+    const s = localStorage.getItem(k);
+    return s ? (JSON.parse(s) as T) : fb;
+  } catch {
+    return fb;
+  }
+}
+function vtSet(k: string, v: unknown) {
+  try {
+    localStorage.setItem(k, JSON.stringify(v));
+  } catch {
+    return;
+  }
+}
+function vtId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+let ytApiPromise: Promise<boolean> | null = null;
+type YtPlayerCtor = new (el: HTMLElement, opts: Record<string, unknown>) => { destroy: () => void };
+type YtWindow = { YT?: { Player?: unknown }; onYouTubeIframeAPIReady?: () => void };
+const YT_API_SRC = "https://www.youtube.com/iframe_api";
+
+function ytPlayerCtor(): YtPlayerCtor | null {
+  const ctor = (window as unknown as YtWindow).YT?.Player;
+  return typeof ctor === "function" ? (ctor as YtPlayerCtor) : null;
+}
+
+function ensureYtApi(): Promise<boolean> {
+  if (ytPlayerCtor()) return Promise.resolve(true);
+  if (ytApiPromise) return ytApiPromise;
+  ytApiPromise = new Promise<boolean>((resolve) => {
+    const win = window as unknown as YtWindow;
+    let settled = false;
+    let poll = 0;
+    const done = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearInterval(poll);
+      if (!ok) ytApiPromise = null;
+      resolve(ok);
+    };
+    poll = window.setInterval(() => { if (ytPlayerCtor()) done(true); }, 120);
+    window.setTimeout(() => done(ytPlayerCtor() !== null), 8000);
+    win.onYouTubeIframeAPIReady = () => done(ytPlayerCtor() !== null);
+    if (!document.querySelector(`script[src="${YT_API_SRC}"]`)) {
+      const tag = document.createElement("script");
+      tag.src = YT_API_SRC;
+      tag.async = true;
+      tag.onerror = () => done(false);
+      document.head.appendChild(tag);
+    }
+  });
+  return ytApiPromise;
+}
+
+function fmtDur(sec: number) {
+  const s = Math.max(0, Math.floor(sec || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}` : `${m}:${String(r).padStart(2, "0")}`;
+}
+function fmtViews(n: number) {
+  if (!n) return "";
+  return n >= 1e6 ? `${(n / 1e6).toFixed(1)}M views` : n >= 1e3 ? `${Math.round(n / 1e3)}K views` : `${n} views`;
+}
+function fmtCount(n: number) {
+  return n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : `${n}`;
+}
+
+function VerTubeSurface() {
+  const [tab, setTab] = useState<"home" | "search" | "library">("home");
+  const [query, setQuery] = useState("");
+  const [qSrc, setQSrc] = useState("");
+  const [kind, setKind] = useState<VTKind>("all");
+  const [cat, setCat] = useState("Trending");
+  const [homeFeed, setHomeFeed] = useState<VTItem[]>([]);
+  const [results, setResults] = useState<VTItem[]>([]);
+  const [channels, setChannels] = useState<VTChannel[]>([]);
+  const [listTitle, setListTitle] = useState("Results");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [playing, setPlaying] = useState<VTItem | null>(null);
+  const [mirror, setMirror] = useState(0);
+  const [recents, setRecents] = useState<string[]>(() => vtGet(VT_KEY_RECENTS, [] as string[]));
+  const [playlists, setPlaylists] = useState<VTPL[]>(() => vtGet(VT_KEY_PLAYLISTS, [] as VTPL[]));
+  const [watchLater, setWatchLater] = useState<VTItem[]>(() => vtGet(VT_KEY_LATER, [] as VTItem[]));
+  const [history, setHistory] = useState<VTItem[]>(() => vtGet(VT_KEY_HISTORY, [] as VTItem[]));
+  const [libTab, setLibTab] = useState<"playlists" | "later" | "history">("playlists");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [acMenu, setAcMenu] = useState<string | null>(null);
+  const [newPlName, setNewPlName] = useState("");
+  const [plExpand, setPlExpand] = useState<string | null>(null);
+  const [queue, setQueue] = useState<VTItem[] | null>(null);
+  const [queueTitle, setQueueTitle] = useState("");
+  const playerHostRef = useRef<HTMLDivElement>(null);
+  const ytPlayerRef = useRef<{ destroy: () => void } | null>(null);
+  const videoSessionRef = useRef<MediaSession | null>(null);
+  const advancedForRef = useRef("");
+
+  type RawVid = { videoId?: string; title?: string; author?: string; viewCount?: number; lengthSeconds?: number; authorVerified?: boolean; publishedText?: string; liveNow?: boolean; description?: string };
+  type RawChan = { author?: string; authorId?: string; authorVerified?: boolean; authorThumbnails?: { url?: string }[]; subCount?: number; subscriberText?: string; channelHandle?: string; type?: string };
+
+  function toItems(list: RawVid[]) {
+    return (list || []).filter((v) => v.videoId).map((v) => ({ id: v.videoId!, title: v.title || "Untitled", author: v.author || "Unknown", views: v.viewCount || 0, seconds: v.lengthSeconds || 0, verified: !!v.authorVerified, published: v.publishedText || "", desc: v.description || "", liveNow: !!v.liveNow }));
+  }
+  function toChannels(list: RawChan[]) {
+    return (list || []).filter((c) => c.type === "channel" && c.authorId).map((c) => {
+      const t = c.authorThumbnails?.[c.authorThumbnails.length - 1]?.url;
+      return { id: c.authorId!, name: c.author || "Channel", verified: !!c.authorVerified, thumb: t && t !== "" ? `https:${t}` : "", subLabel: c.subscriberText || fmtCount(c.subCount || 0), handle: c.channelHandle || "" };
+    });
+  }
+
+  async function feedBySearch(q: string, type = "video", sort = "view_count") {
+    const params = new URLSearchParams({ q, type, fields: VT_FIELDSV });
+    if (sort) params.set("sort_by", sort);
+    const res = await fetch(`https://invidious.f5.si/api/v1/search?${params.toString()}`);
+    if (!res.ok) throw new Error("feed failed");
+    return toItems(await res.json() as RawVid[]);
+  }
+
+  async function loadHome(category: string) {
+    setLoading(true);
+    setError("");
+    setQueue(null);
+    setQueueTitle("");
+    try {
+      let items: VTItem[] = [];
+      if (category === "Trending") {
+        const res = await fetch(`https://invidious.f5.si/api/v1/trending?fields=${VT_FIELDSV}`);
+        if (res.ok) {
+          items = toItems(await res.json() as RawVid[]).filter((v) => v.views > 0 && (v.seconds > 0 || v.liveNow));
+        }
+        if (items.length < 6) items = await feedBySearch("trending videos right now");
+      } else if (category === "Shorts") {
+        items = await feedBySearch("shorts", "shorts");
+      } else if (category === "Live") {
+        items = (await feedBySearch("live stream today")).filter((v) => v.liveNow);
+        if (items.length < 4) items = await feedBySearch("live stream today");
+      } else {
+        items = await feedBySearch(VT_CATS.find((c) => c.label === category)?.hint || category);
+      }
+      setHomeFeed(items);
+      if (!items.length) setError(`That "${category}" feed came back empty — try another or search.`);
+    } catch {
+      setError("Couldn't load that feed — search still works.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void loadHome("Trending"); }, []);
+
+  async function runSearch(term: string, k = kind) {
+    const clean = term.trim() || qSrc;
+    if (!clean) return;
+    if (term.trim()) setQSrc(clean);
+    markRecent(clean);
+    setQueue(null);
+    setQueueTitle("");
+    setTab("search");
+    setLoading(true);
+    setError("");
+    setListTitle(`Results for "${clean}"`);
+    try {
+      if (k === "channels") {
+        const params = new URLSearchParams({ q: clean, type: "channel", fields: VT_FIELDSCH });
+        const res = await fetch(`https://invidious.f5.si/api/v1/search?${params.toString()}`);
+        if (!res.ok) throw new Error("search failed");
+        const out = toChannels(await res.json() as RawChan[]);
+        setChannels(out);
+        setResults([]);
+        if (!out.length) setError("No channels found — try different wording.");
+      } else {
+        const qType = k === "shorts" ? "shorts" : "video";
+        const params = new URLSearchParams({ q: clean, type: qType, fields: VT_FIELDSV });
+        if (k !== "shorts") params.set("sort_by", "relevance");
+        const res = await fetch(`https://invidious.f5.si/api/v1/search?${params.toString()}`);
+        if (!res.ok) throw new Error("search failed");
+        const out = toItems(await res.json() as RawVid[]);
+        setResults(out);
+        let chOut: VTChannel[] = [];
+        if (k === "all") {
+          const cparams = new URLSearchParams({ q: clean, type: "channel", fields: VT_FIELDSCH });
+          const cres = await fetch(`https://invidious.f5.si/api/v1/search?${cparams.toString()}`);
+          if (cres.ok) chOut = toChannels(await cres.json() as RawChan[]);
+        }
+        setChannels(chOut);
+        if (!out.length && chOut.length === 0) setError("No videos found — try different wording.");
+      }
+    } catch {
+      setError("Couldn't reach the video search — try again in a bit.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function openChannel(ch: VTChannel) {
+    setTab("search");
+    setLoading(true);
+    setError("");
+    setQueue(null);
+    setQueueTitle("");
+    setListTitle(`Videos from ${ch.name}`);
+    try {
+      const res = await fetch(`https://invidious.f5.si/api/v1/channels/${encodeURIComponent(ch.id)}/videos?fields=${VT_FIELDSV}`);
+      if (!res.ok) throw new Error("channel failed");
+      const data = await res.json() as { videos?: RawVid[] };
+      const out = toItems(data.videos || []);
+      setResults(out);
+      setChannels([]);
+      if (!out.length) setError("No videos on this channel — try another.");
+    } catch {
+      setError("Couldn't load this channel — try again in a bit.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const play = (v: VTItem) => {
+    setPlaying(v);
+    const h = [v, ...history.filter((x) => x.id !== v.id)].slice(0, 50);
+    setHistory(h);
+    vtSet(VT_KEY_HISTORY, h);
+  };
+  const markRecent = (term: string) => {
+    const r = [term, ...recents.filter((x) => x !== term)].slice(0, 8);
+    setRecents(r);
+    vtSet(VT_KEY_RECENTS, r);
+  };
+  const clearRecents = () => {
+    setRecents([]);
+    vtSet(VT_KEY_RECENTS, []);
+  };
+  const toggleLater = (v: VTItem) => {
+    const has = watchLater.some((x) => x.id === v.id);
+    const l = has ? watchLater.filter((x) => x.id !== v.id) : [v, ...watchLater];
+    setWatchLater(l);
+    vtSet(VT_KEY_LATER, l);
+  };
+  const makePlaylist = (name: string) => {
+    const n = name.trim();
+    if (!n) return "";
+    const pl: VTPL = { id: vtId(), name: n, items: [] };
+    const list = [...playlists, pl];
+    setPlaylists(list);
+    vtSet(VT_KEY_PLAYLISTS, list);
+    setNewPlName("");
+    return pl.id;
+  };
+  const addToPlaylist = (v: VTItem, plId: string) => {
+    const list = playlists.map((pl) => (pl.id === plId && !pl.items.some((x) => x.id === v.id) ? { ...pl, items: [...pl.items, v] } : pl));
+    setPlaylists(list);
+    vtSet(VT_KEY_PLAYLISTS, list);
+    setAcMenu(null);
+  };
+  const createAndAdd = (v: VTItem) => {
+    const id = makePlaylist(newPlName);
+    if (id) addToPlaylist(v, id);
+  };
+  const removeFromPlaylist = (plId: string, vid: string) => {
+    const list = playlists.map((pl) => (pl.id === plId ? { ...pl, items: pl.items.filter((x) => x.id !== vid) } : pl));
+    setPlaylists(list);
+    vtSet(VT_KEY_PLAYLISTS, list);
+  };
+  const deletePlaylist = (plId: string) => {
+    const list = playlists.filter((pl) => pl.id !== plId);
+    setPlaylists(list);
+    vtSet(VT_KEY_PLAYLISTS, list);
+    if (plExpand === plId) setPlExpand(null);
+  };
+  const removeHistory = (vid: string) => {
+    const h = history.filter((x) => x.id !== vid);
+    setHistory(h);
+    vtSet(VT_KEY_HISTORY, h);
+  };
+  const clearHistory = () => {
+    setHistory([]);
+    vtSet(VT_KEY_HISTORY, []);
+  };
+  const clearLater = () => {
+    setWatchLater([]);
+    vtSet(VT_KEY_LATER, []);
+  };
+
+  const openTab = () => {
+    if (!playing) return;
+    window.open(`https://www.youtube.com/watch?v=${playing.id}`, "_blank");
+  };
+  const cycleMirror = () => setMirror((m) => (m + 1) % VT_EMBEDS.length);
+  const stop = () => {
+    setPlaying(null);
+    setQueue(null);
+    setQueueTitle("");
+  };
+  const playQueue = (list: VTItem[], title: string) => {
+    if (!list.length) return;
+    setQueue(list);
+    setQueueTitle(title);
+    play(list[0]);
+  };
+
+  const advanceToNext = () => {
+    if (!queue || queue.length < 2) return;
+    const now = playing?.id;
+    if (!now) return;
+    const idx = queue.findIndex((x) => x.id === now);
+    if (idx >= 0 && idx < queue.length - 1) play(queue[idx + 1]);
+  };
+
+  useEffect(() => {
+    if (!playing) return;
+    const host = playerHostRef.current;
+    if (!host) return;
+    const videoId = playing.id;
+    const mirrorHost = VT_EMBEDS[mirror];
+    const hostUrl = mirrorHost.includes("nocookie") ? "https://www.youtube-nocookie.com" : "https://www.youtube.com";
+    const allowAttr = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen";
+    let cancelled = false;
+    let mount: HTMLElement | null = null;
+    const clearHost = () => {
+      try { host.replaceChildren(); } catch { /* host already gone */ }
+      mount = null;
+    };
+    const newMount = () => {
+      clearHost();
+      const el = document.createElement("div");
+      el.className = "vertube-embed";
+      host.appendChild(el);
+      mount = el;
+      return el;
+    };
+    const putFallback = () => {
+      if (cancelled) return;
+      const el = newMount();
+      const f = document.createElement("iframe");
+      f.className = "vertube-frame";
+      f.src = `${mirrorHost}/${videoId}?autoplay=1&playsinline=1`;
+      f.setAttribute("allow", allowAttr);
+      f.setAttribute("allowfullscreen", "true");
+      el.appendChild(f);
+    };
+    ensureYtApi().then((ok) => {
+      if (cancelled) return;
+      const Ctor = ok ? ytPlayerCtor() : null;
+      if (!Ctor) {
+        putFallback();
+        return;
+      }
+      if (ytPlayerRef.current) {
+        try { ytPlayerRef.current.destroy(); } catch { /* already torn down */ }
+        ytPlayerRef.current = null;
+      }
+      const el = newMount();
+      try {
+        ytPlayerRef.current = new Ctor(el, {
+          videoId,
+          host: hostUrl,
+          playerVars: { autoplay: 1, playsinline: 1 },
+          events: {
+            onStateChange: (e: unknown) => {
+              if ((e as { data?: number }).data === 0) {
+                const mark = `${videoId}-${mirror}`;
+                if (advancedForRef.current === mark) return;
+                advancedForRef.current = mark;
+                advanceToNext();
+              }
+            },
+          },
+        });
+      } catch {
+        ytPlayerRef.current = null;
+        putFallback();
+        return;
+      }
+      let tries = 0;
+      const applyAllow = () => {
+        if (cancelled) return;
+        const iframe = host.querySelector("iframe");
+        if (iframe) {
+          iframe.setAttribute("allow", allowAttr);
+          iframe.setAttribute("allowfullscreen", "true");
+        } else if (tries++ < 40) {
+          setTimeout(applyAllow, 50);
+        }
+      };
+      applyAllow();
+    });
+    return () => {
+      cancelled = true;
+      const player = ytPlayerRef.current;
+      ytPlayerRef.current = null;
+      if (player) {
+        try { player.destroy(); } catch { /* iframe already detached */ }
+      }
+      if (mount) { try { mount.remove(); } catch { /* ignore */ } }
+      clearHost();
+    };
+  }, [playing, mirror]);
+
+  const videoPlayRef = useRef(playing);
+  videoPlayRef.current = playing;
+
+  useEffect(() => {
+    if (!playing) {
+      if (videoSessionRef.current) {
+        if (getMediaSession() === videoSessionRef.current) setMediaSession(null);
+        videoSessionRef.current = null;
+      }
+      return;
+    }
+    if (!videoSessionRef.current) {
+      const session: MediaSession = {
+        source: "video",
+        get title() { return videoPlayRef.current?.title ?? ""; },
+        get artist() { return videoPlayRef.current?.author ?? ""; },
+        get artwork() {
+          const v = videoPlayRef.current;
+          return v ? `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg` : "";
+        },
+        get playing() { return true; },
+        get progress() {
+          const p = ytPlayerRef.current as unknown as { getCurrentTime?: () => number } | null;
+          return p?.getCurrentTime?.() ?? 0;
+        },
+        get duration() {
+          const p = ytPlayerRef.current as unknown as { getDuration?: () => number } | null;
+          return p?.getDuration?.() ?? 0;
+        },
+        onToggle: () => {
+          const p = ytPlayerRef.current as unknown as { getPlayerState?: () => number; pauseVideo?: () => void; playVideo?: () => void } | null;
+          if (!p?.getPlayerState) return;
+          if (p.getPlayerState() === 1) p.pauseVideo?.();
+          else p.playVideo?.();
+        },
+        onClose: () => stop(),
+      };
+      videoSessionRef.current = session;
+      setMediaSession(session);
+    } else {
+      notifyMediaSession();
+    }
+  }, [playing]);
+
+  useEffect(() => () => {
+    const session = videoSessionRef.current;
+    if (session && getMediaSession() === session) setMediaSession(null);
+    videoSessionRef.current = null;
+  }, []);
+
+  const listItems = queue ?? (tab === "search" ? results : homeFeed);
+  const asideHidden = !playing;
+  const plyId = playing?.id;
+  const showResultsPage = listTitle !== "Results" || loading || results.length > 0 || channels.length > 0;
+  const hasChannels = channels.length > 0;
+  const hasResults = results.length > 0;
+  const hasNothing = results.length === 0 && channels.length === 0;
+
+  const metaLine = (v: VTItem) => (
+    <span className="vertube-metab">
+      <span className="vertube-author">{v.author}</span>
+      {v.verified && <BadgeCheck size={13} className="vertube-verified" />}
+      {v.views > 0 && <><span className="vertube-dot">·</span><span>{fmtViews(v.views)}</span></>}
+      {v.published && <><span className="vertube-dot">·</span><span>{v.published}</span></>}
+      {v.liveNow && <><span className="vertube-dot">·</span><span className="vertube-istext">Live</span></>}
+    </span>
+  );
+
+  const thumbBadge = (v: VTItem) => v.liveNow ? <span className="vertube-live">LIVE</span> : <span className="vertube-dur">{fmtDur(v.seconds)}</span>;
+
+  const videoRow = (v: VTItem, opts?: { onRemove?: () => void }) => {
+    const isOn = plyId === v.id;
+    const isOpen = expandedId === v.id;
+    const inLater = watchLater.some((x) => x.id === v.id);
+    return (
+      <div key={v.id} className={`vertube-row ${isOn ? "on" : ""}`}>
+        <div className="vertube-row-top">
+          <button className="vertube-row-main" onClick={() => play(v)}>
+            <span className="vertube-result-thumb">
+              <img src={`https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`} alt="" loading="lazy" />
+              {thumbBadge(v)}
+            </span>
+            <span className="vertube-result-meta">
+              <strong>{v.title}</strong>
+              {metaLine(v)}
+              {v.desc && <span className={`vertube-result-desc ${isOpen ? "full" : "clamp"}`}>{v.desc}</span>}
+            </span>
+          </button>
+          <span className="vertube-row-side">
+            <button className="vertube-mini" onClick={() => setExpandedId(isOpen ? null : v.id)} aria-label="Show more"><ChevronDown size={16} className={isOpen ? "vertube-flip" : ""} /></button>
+            <button className="vertube-mini" onClick={() => setAcMenu(acMenu === v.id ? null : v.id)} aria-label="Add to playlist"><Plus size={16} /></button>
+            <button className={`vertube-mini ${inLater ? "on" : ""}`} onClick={() => toggleLater(v)} aria-label="Watch later"><Clock size={16} /></button>
+            {opts?.onRemove && <button className="vertube-mini danger" onClick={() => opts.onRemove?.()} aria-label="Remove"><X size={16} /></button>}
+          </span>
+        </div>
+        {acMenu === v.id && (
+          <div className="vertube-plmenu">
+            {playlists.map((pl) => (
+              <button key={pl.id} onClick={() => addToPlaylist(v, pl.id)}><ListVideo size={13} /> {pl.name} ({pl.items.length})</button>
+            ))}
+            <span className="vertube-plmenu-new">
+              <input value={newPlName} onChange={(e) => setNewPlName(e.target.value)} placeholder="New playlist name" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); createAndAdd(v); } }} />
+              <button onClick={() => createAndAdd(v)}><Plus size={13} /> Create</button>
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const resultsList = (items: VTItem[], onRemove?: (v: VTItem) => void) => (
+    <div className="vertube-list-stack">
+      {items.map((v) => videoRow(v, onRemove ? { onRemove: () => onRemove(v) } : undefined))}
+    </div>
+  );
+
+  const libraryPage = (
+    <div className="vertube-library">
+      <div className="vertube-lib-tabs">
+        <button className={`vertube-cat ${libTab === "playlists" ? "on" : ""}`} onClick={() => setLibTab("playlists")}>Playlists</button>
+        <button className={`vertube-cat ${libTab === "later" ? "on" : ""}`} onClick={() => setLibTab("later")}>Watch later{watchLater.length > 0 ? ` (${watchLater.length})` : ""}</button>
+        <button className={`vertube-cat ${libTab === "history" ? "on" : ""}`} onClick={() => setLibTab("history")}>History{history.length > 0 ? ` (${history.length})` : ""}</button>
+      </div>
+
+      {libTab === "playlists" && (
+        <div className="vertube-pl-grid">
+          <div className="vertube-pl-card vertube-pl-new">
+            <input value={newPlName} onChange={(e) => setNewPlName(e.target.value)} placeholder="New playlist name" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); makePlaylist(newPlName); } }} />
+            <button onClick={() => makePlaylist(newPlName)}><Plus size={14} /> Create playlist</button>
+          </div>
+          {playlists.map((pl) => (
+            <div key={pl.id} className="vertube-pl-card">
+              <div className="vertube-pl-head">
+                <div className="vertube-pl-title">
+                  <ListVideo size={16} className="vertube-verified" />
+                  <strong>{pl.name}</strong>
+                  <small>{pl.items.length} video{pl.items.length === 1 ? "" : "s"}</small>
+                </div>
+                <span className="vertube-pl-actions">
+                  <button className="vertube-pl-play" disabled={pl.items.length === 0} onClick={() => playQueue(pl.items, pl.name)} aria-label={`Play ${pl.name}`}><Play size={14} fill="currentColor" /> Play</button>
+                  <span className="vertube-row-side">
+                    <button className="vertube-mini" onClick={() => setPlExpand(plExpand === pl.id ? null : pl.id)} aria-label="Expand playlist"><ChevronDown size={16} className={plExpand === pl.id ? "vertube-flip" : ""} /></button>
+                    <button className="vertube-mini danger" onClick={() => deletePlaylist(pl.id)} aria-label="Delete playlist"><Trash2 size={15} /></button>
+                  </span>
+                </span>
+              </div>
+              {pl.items.length === 0 && <div className="vertube-empty">Empty — tap + on any video to add it.</div>}
+              {plExpand === pl.id && pl.items.length > 0 && resultsList(pl.items, (v) => removeFromPlaylist(pl.id, v.id))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {libTab === "later" && (
+        <div className="vertube-lib-list">
+          {watchLater.length === 0 ? <div className="vertube-empty">Nothing saved yet — tap the clock icon on any video.</div> : (
+            <>
+              <button className="vertube-clear" onClick={clearLater}><Minus size={13} /> Clear watch later</button>
+              {resultsList(watchLater, (v) => toggleLater(v))}
+            </>
+          )}
+        </div>
+      )}
+
+      {libTab === "history" && (
+        <div className="vertube-lib-list">
+          {history.length === 0 ? <div className="vertube-empty">Nothing watched yet — everything you play lands here.</div> : (
+            <>
+              <button className="vertube-clear" onClick={clearHistory}><Minus size={13} /> Clear history</button>
+              {resultsList(history, (v) => removeHistory(v.id))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="vertube-app">
+      <header className="vertube-top">
+        <div className="vertube-brand"><img src="https://www.youtube.com/s/desktop/af0a3c1e/img/favicon_144x144.png" alt="" />VER-TUBE</div>
+        <form className="vertube-search" onSubmit={(e) => { e.preventDefault(); void runSearch(query); }}>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search videos or channels — no account needed" aria-label="Search videos or channels" />
+          <button type="submit" aria-label="Search"><Search size={18} /></button>
+        </form>
+        <div className="vertube-mirror">
+          <span>Player</span>
+          <button onClick={cycleMirror} aria-label="Switch player mirror"><RotateCcw size={14} /> {VT_MIRROR_NAMES[mirror]}</button>
+        </div>
+      </header>
+
+      <nav className="vertube-tabs">
+        <button className={`vertube-tab ${tab === "home" && !playing ? "on" : ""}`} onClick={() => { setTab("home"); stop(); }}>Home</button>
+        <button className={`vertube-tab ${tab === "search" && !playing ? "on" : ""}`} onClick={() => { setTab("search"); stop(); }}>Search</button>
+        <button className={`vertube-tab ${tab === "library" && !playing ? "on" : ""}`} onClick={() => { setTab("library"); stop(); }}>Library</button>
+        {playing && <button className="vertube-back" onClick={stop}><ArrowLeft size={14} /> Back</button>}
+      </nav>
+
+      <div className="vertube-body">
+        <main className="vertube-stage">
+          {playing ? (
+            <>
+              <div className="vertube-frame-wrap">
+                <div className="vertube-frame" ref={playerHostRef} />
+              </div>
+              <div className="vertube-now">
+                <strong className="vertube-now-title">{playing.title}{playing.liveNow && <span className="vertube-now-live">LIVE</span>}</strong>
+                {metaLine(playing)}
+                <div className="vertube-now-actions">
+                  <button onClick={cycleMirror}><RotateCcw size={13} /> Switch player (if blocked)</button>
+                  <button onClick={openTab}><ExternalLink size={13} /> Open in tab</button>
+                </div>
+              </div>
+            </>
+          ) : tab === "home" ? (
+            loading && !homeFeed.length ? <div className="vertube-empty">Loading videos…</div> : (
+              <>
+                <div className="vertube-cats">
+                  {VT_CATS.map((c) => <button key={c.label} className={`vertube-cat ${cat === c.label ? "on" : ""}`} onClick={() => { setCat(c.label); void loadHome(c.label); }}>{c.label}</button>)}
+                </div>
+                {error && <div className="vertube-error">{error}</div>}
+                <div className="vertube-grid">
+                  {homeFeed.map((v) => (
+                    <button key={v.id} className="vertube-card" onClick={() => play(v)}>
+                      <span className="vertube-card-thumb">
+                        <img src={`https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`} alt="" loading="lazy" />
+                        {thumbBadge(v)}
+                      </span>
+                      <strong>{v.title}</strong>
+                      <span className="vertube-card-line">
+                        <span>{v.author}</span>
+                        {v.verified && <BadgeCheck size={12} className="vertube-verified" />}
+                        {v.views > 0 && <><span className="vertube-dot">·</span><span>{fmtViews(v.views)}</span></>}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )
+          ) : tab === "library" ? (
+            libraryPage
+          ) : showResultsPage ? (
+            <>
+              {!listTitle.startsWith("Videos from") && (
+                <div className="vertube-cats vertube-filters">
+                  {VT_KINDS.map((k) => (
+                    <button key={k} className={`vertube-cat ${kind === k ? "on" : ""}`} onClick={() => { setKind(k); void runSearch(qSrc, k); }}>{k[0].toUpperCase() + k.slice(1)}</button>
+                  ))}
+                </div>
+              )}
+              {loading && <div className="vertube-empty">Loading…</div>}
+              {!loading && error && <div className="vertube-error">{error}</div>}
+              {!loading && error === "" && hasChannels && (
+                <div className="vertube-chans">
+                  <div className="vertube-section">Channels</div>
+                  {channels.map((ch) => (
+                    <button key={ch.id} className="vertube-result-chan" onClick={() => void openChannel(ch)}>
+                      {ch.thumb ? <img src={ch.thumb} alt="" loading="lazy" /> : <span className="vertube-chan-ph2">{(ch.name[0] || "?").toUpperCase()}</span>}
+                      <span className="vertube-result-chan-meta">
+                        <strong>{ch.name}{ch.verified && <BadgeCheck size={14} className="vertube-verified" />}</strong>
+                        <small>{ch.handle || ch.name}{ch.subLabel ? ` · ${ch.subLabel}` : ""}</small>
+                        <small className="vertube-nofollow">No following here — tap to watch their videos</small>
+                      </span>
+                      <span className="vertube-result-chan-open">Show videos <ChevronRight size={14} /></span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!loading && error === "" && hasResults && (
+                <div className="vertube-results">
+                  <div className="vertube-section">Videos</div>
+                  {resultsList(results)}
+                </div>
+              )}
+              {!loading && error === "" && hasNothing && (
+                <div className="vertube-empty">No results for that — try different wording or a different type.</div>
+              )}
+            </>
+          ) : (
+            <div className="vertube-hero">
+              <img src="https://www.youtube.com/s/desktop/af0a3c1e/img/favicon_144x144.png" alt="" />
+              <h2>Search above, then pick a video — nothing plays by itself.</h2>
+              <p className="vertube-hero-sub">Results appear full-width below as a list: channels on top, then videos. While something plays they move to the right as your line. Lives stream right in the player. No accounts here — your watch history, watch-later and playlists are saved on this device.</p>
+              {recents.length > 0 && (
+                <div className="vertube-recents">
+                  <div className="vertube-section">Recent searches</div>
+                  <div className="vertube-recent-chips">
+                    {recents.map((r) => (
+                      <button key={r} className="vertube-recent-chip" onClick={() => { setQuery(r); void runSearch(r); }}><Search size={12} /> {r}</button>
+                    ))}
+                    <button className="vertube-recent-chip clear" onClick={clearRecents}><X size={12} /> Clear</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+
+        <aside className={`vertube-list ${asideHidden ? "hidden" : ""}`}>
+          <div className="vertube-list-head">
+            <div className="vertube-list-title">{queueTitle || (tab === "search" ? listTitle : "Up next")}</div>
+            {listItems.length > 0 && <div className="vertube-rail-count">{listItems.length + channels.length}</div>}
+          </div>
+          {loading && <div className="vertube-empty">Loading…</div>}
+          {!loading && error && <div className="vertube-error">{error}</div>}
+          {!loading && !error && channels.length > 0 && (
+            <div className="vertube-channels">
+              {channels.map((ch) => (
+                <button key={ch.id} className="vertube-chan" onClick={() => void openChannel(ch)}>
+                  {ch.thumb ? <img src={ch.thumb} alt="" loading="lazy" /> : <span className="vertube-chan-ph">{(ch.name[0] || "?").toUpperCase()}</span>}
+                  <span className="vertube-chan-meta">
+                    <strong>{ch.name}{ch.verified && <BadgeCheck size={13} className="vertube-verified" />}</strong>
+                    <small>{ch.handle || ch.name}{ch.subLabel ? ` · ${ch.subLabel}` : ""} — tap to watch</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          {!loading && !error && !listItems.length && !channels.length && (
+            <div className="vertube-empty">{tab === "search" ? "Results appear here — tap a video to play it." : "Tap a video to start watching."}</div>
+          )}
+          {!loading && listItems.map((v) => (
+            <button key={v.id} className={`vertube-item ${plyId === v.id ? "on" : ""}`} onClick={() => play(v)}>
+              <span className="vertube-thumb-wrap">
+                <img className="vertube-thumb" src={`https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`} alt="" loading="lazy" />
+                {thumbBadge(v)}
+              </span>
+              <span className="vertube-meta">
+                <strong>{v.title}</strong>
+                {metaLine(v)}
+              </span>
+            </button>
+          ))}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (key: keyof SystemSettings, value: boolean | string) => void, faqOpen: number | null, setFaqOpen: (value: number | null) => void, lang: Lang, onLanguagePick: (language: Lang) => void, onPanic: () => void, onClose: (() => void) | null = null, onMinimize: (() => void) | null = null, onTrackChange: ((track: { name: string; artist: string; artwork: string } | null) => void) | null = null, translucent: boolean = false, onTranslucent: ((value: boolean) => void) | null = null, onApplyWallpaper: ((id: WallpaperId, target: "both" | "home" | "lock") => void) | null = null, appliedWallpaper: WallpaperId = "singularity", appliedLockWallpaper: WallpaperId = "singularity", onNotify: ((title: string, copy: string) => void) | null = null, wppInstalled: boolean = false, onInstallPicker: (() => void) | null = null, onFsociety: ((active: boolean) => void) | null = null, activeAccount: VertexAccount | null = null, onAvatarChange: ((avatar: string) => void) | null = null, onAccountChange: ((patch: { name?: string; email?: string }) => void) | null = null) {
+  if (id === "settings") return <SettingsSurface settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} lang={lang} onLanguagePick={onLanguagePick} onPanic={onPanic} avatar={activeAccount?.avatar} accountName={activeAccount?.name} accountEmail={activeAccount?.email} onAvatarChange={onAvatarChange ?? undefined} onAccountChange={onAccountChange ?? undefined} appliedWallpaper={appliedWallpaper} appliedLockWallpaper={appliedLockWallpaper} onApplyWallpaper={onApplyWallpaper ?? undefined} onNotify={onNotify ?? undefined} />;
+  if (id === "terminal") return <div className="window-surface term-app-surface"><TerminalSurface installed={wppInstalled} onInstalled={onInstallPicker ?? (() => {})} onFsociety={onFsociety ?? (() => {})} /></div>;
   if (id === "translucenttb") return <div className="window-surface"><div className="surface-kicker">{t("surf.translucent.kicker")}</div><h2 className="surface-title">{t("surf.translucent.title")}</h2><p className="surface-copy">{t("surf.translucent.body")}</p><div className="settings-list"><SettingToggle label={t("surf.translucent.enable")} help={t("surf.translucent.help")} value={translucent} onChange={(value) => onTranslucent?.(value)} /></div></div>;
   if (id === "spicetify") return <CinefySurface onClose={onClose ?? (() => undefined)} onMinimize={onMinimize ?? (() => undefined)} onTrackChange={onTrackChange ?? (() => undefined)} />;
-  if (id === "chronusgpt") return <ChronusGPTSurface onClose={onClose ?? (() => undefined)} />;
   const adRedir = settings.adblock && settings.adblockUrl.trim() ? settings.adblockUrl : null;
   if (id === "hub") return <iframe className="browser-frame" src={adRedir ?? "https://velara.cc/g"} title="Vertex-Hub / velara.cc" allow="autoplay; clipboard-write; camera; microphone; fullscreen" />;
   if (id === "wallpaper-engine") return <div className="window-surface we-app-surface"><WallEngineApp appliedHome={appliedWallpaper} appliedLock={appliedLockWallpaper} onApplyWallpaper={onApplyWallpaper ?? (() => {})} notify={onNotify ?? undefined} /></div>;
-  if (id === "browser") return <iframe className="browser-frame" src={adRedir ?? "https://endis.rest/"} title="Browser / endis.rest" allow="autoplay; clipboard-write; camera; microphone; fullscreen" />;
+  if (id === "browser") return adRedir
+    ? <iframe className="browser-frame" src={adRedir} title="Browser redirect" allow="autoplay; clipboard-write; fullscreen" />
+    : <BrowserSurface lang={lang} />;
   if (id === "calculator") return <div className="window-surface calc-app-surface"><CalculatorSurface /></div>;
   if (id === "pizza") return <iframe className="browser-frame" src={adRedir ?? "https://pizzaedition.com/"} title="Pizza edition" allow="autoplay; clipboard-write; camera; microphone; fullscreen" />;
   if (id === "roblox") return <iframe className="browser-frame" src={adRedir ?? "https://frogiesarcade.net/"} title="Roblox / frogies arcade" allow="autoplay; clipboard-write; camera; microphone; fullscreen" />;
-  if (id === "messages") return <MessagesSurface />;
-  if (id === "games") return <div className="window-surface ps5-app-surface"><Ps5EmulatorSurface /></div>;
+  if (id === "messages") return <div className="window-surface msgs-surface"><MessagesSurface /></div>;
+  if (id === "verai") return <div className="window-surface verai-surface"><VerAiSurface /></div>;
+  if (id === "vertube") return <div className="window-surface vertube-surface"><VerTubeSurface /></div>;
+  if (id === "ghostview") return <div className="window-surface gv-app-surface"><GhostViewSurface wallpaperResolve={wallImg} onStop={() => { onClose?.(); }} /></div>;
+  if (id === "games") return <div className="window-surface ps5-app-surface"><Ps5EmulatorSurface surfaces={{ spotify: CinefySurface, verTube: VerTubeSurface }} /></div>;
   if (id === "minecraft") return <MinecraftLauncherSurface />;
   if (id === "rainmeter") return <RainmeterSurface />;
+  if (id === "links") return <LinksApp />;
   return <div className="window-surface"><div className="surface-kicker">VERTEX</div><h2 className="surface-title">surface</h2></div>;
+}
+
+function useMediaSession(): MediaSession | null {
+  const [session, setSession] = useState<MediaSession | null>(() => getMediaSession());
+  useEffect(() => subscribeMediaSession(() => setSession(getMediaSession())), []);
+  return session;
+}
+
+function NowPlayingCard() {
+  const session = useMediaSession();
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!session) return;
+    const id = window.setInterval(() => tick((n) => (n + 1) % 1000), 500);
+    return () => window.clearInterval(id);
+  }, [session]);
+  if (!session) return null;
+  const dur = Number.isFinite(session.duration) && session.duration > 0 ? session.duration : 0;
+  const prog = Number.isFinite(session.progress) && session.progress > 0 ? Math.min(session.progress, dur || session.progress) : 0;
+  const pct = dur ? Math.min(100, (prog / dur) * 100) : 0;
+  const fmt = (value: number) => {
+    const total = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  };
+  return (
+    <div className={`np-card np-${session.source}`} data-testid="now-playing-card">
+      <button className="np-close" onClick={() => session.onClose?.()} aria-label="Close now playing"><X size={14} /></button>
+      <div className="np-body">
+        <div className="np-art">
+          {session.artwork ? <img src={session.artwork} alt="" /> : <span className="np-art-ph"><Music2 size={22} /></span>}
+          <span className={`np-eq ${session.playing ? "on" : ""}`} aria-hidden="true"><i /><i /><i /></span>
+        </div>
+        <div className="np-meta">
+          <span className="np-source">{session.source === "video" ? "Now playing · Video" : "Now playing"}</span>
+          <strong className="np-title">{session.title || "Untitled"}</strong>
+          <span className="np-artist">{session.artist || "Unknown"}</span>
+        </div>
+        <button className="np-toggle" onClick={() => session.onToggle?.()} aria-label={session.playing ? "Pause" : "Play"}>
+          {session.playing ? <Pause size={17} /> : <Play size={17} />}
+        </button>
+      </div>
+      <div className="np-bar">
+        <span className="np-time">{fmt(prog)}</span>
+        <input className="np-seek" type="range" min={0} max={dur || 100} step={0.5} value={dur ? Math.min(prog, dur) : 0} onChange={(event) => session.onSeek?.(Number(event.target.value))} aria-label="Seek" />
+        <span className="np-time">{dur ? fmt(dur) : "--:--"}</span>
+      </div>
+      <span className="np-progress-line" style={{ width: `${pct}%` }} />
+    </div>
+  );
 }
 
 const EAGLER_SINGLE = "/eaglercraft/index.html";
@@ -3144,7 +5775,7 @@ function RealmCard({ realm, onPlay }: { realm: McRealm; onPlay: () => void }) {
 
 type RainmeterPosition = "center" | "top" | "top-left" | "top-right" | "middle-left" | "middle-right" | "bottom-left" | "bottom-center" | "bottom-right" | "free";
 type RainmeterDateStyle = "mond" | "dot" | "long" | "short";
-type RainmeterSkin = "mond" | "summit" | "default";
+type RainmeterSkin = "mond" | "summit" | "default" | "bigsur";
 type RainmeterSettings = {
   showClock: boolean;
   draggable: boolean;
@@ -3186,7 +5817,7 @@ const DEFAULT_RAINMETER: RainmeterSettings = {
   centerRegionPct: 30,
 };
 const RM_DATE_STYLES: RainmeterDateStyle[] = ["mond", "dot", "long", "short"];
-const RM_SKINS: RainmeterSkin[] = ["mond", "summit", "default"];
+const RM_SKINS: RainmeterSkin[] = ["mond", "summit", "default", "bigsur"];
 const RM_POSITIONS: { value: RainmeterPosition; label: string }[] = [
   { value: "center", label: "Center" },
   { value: "top", label: "Top center" },
@@ -3233,10 +5864,10 @@ function RainmeterSurface() {
           <div className="setting-group"><Palette size={13} /> Style</div>
           <p className="surface-copy">Pick the skin that shapes the clock layout.</p>
           <div className="rainmeter-style-grid">
-            {(["mond", "summit", "default"] as const).map((skin) => <button key={skin} className={`rainmeter-style-card ${cfg.skin === skin ? "active" : ""}`} onClick={() => set("skin", skin)} aria-label={skin}>
+            {(["mond", "summit", "default", "bigsur"] as const).map((skin) => <button key={skin} className={`rainmeter-style-card ${cfg.skin === skin ? "active" : ""}`} onClick={() => set("skin", skin)} aria-label={skin}>
               <span className={`rainmeter-style-preview rm-prev-${skin}`}><span className="rmp-day">Friday</span><span className="rmp-time">17:45</span>{skin !== "default" ? <span className="rmp-brand">{skin.toUpperCase()}</span> : null}</span>
-              <strong className="rainmeter-style-name">{skin === "mond" ? "Mond" : skin === "summit" ? "Summit" : "Default"}</strong>
-              <span className="rainmeter-style-desc">{skin === "mond" ? "Two-tone featured clock" : skin === "summit" ? "Minimal & thin" : "Plain classic clock"}</span>
+              <strong className="rainmeter-style-name">{skin === "mond" ? "Mond" : skin === "summit" ? "Summit" : skin === "bigsur" ? "macOS 27" : "Default"}</strong>
+              <span className="rainmeter-style-desc">{skin === "mond" ? "Two-tone featured clock" : skin === "summit" ? "Minimal & thin" : skin === "bigsur" ? "macOS 27 style clock" : "Plain classic clock"}</span>
             </button>)}
           </div>
           <div className="setting-group"><Palette size={13} /> Colors</div>
@@ -3255,7 +5886,44 @@ function RainmeterSurface() {
   </div>;
 }
 
-function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic }: {
+type SettingsTabId = "home" | "personalization" | "widgets" | "account" | "system" | "colors" | "language" | "privacy" | "about";
+
+const SETTINGS_TABS: { id: SettingsTabId; label: string; icon: LucideIcon }[] = [
+  { id: "home", label: "Home", icon: House },
+  { id: "personalization", label: "Personalization", icon: Paintbrush },
+  { id: "widgets", label: "Widgets", icon: Sparkles },
+  { id: "account", label: "Account", icon: User },
+  { id: "system", label: "System", icon: Cpu },
+  { id: "colors", label: "Color mode", icon: SunMoon },
+  { id: "language", label: "Language & region", icon: Languages },
+  { id: "privacy", label: "Privacy & security", icon: ShieldBan },
+  { id: "about", label: "About", icon: Info },
+];
+
+const SETTINGS_SEARCH: { tab: SettingsTabId; label: string; hint: string }[] = [
+  { tab: "home", label: "Device name", hint: "Rename this device" },
+  { tab: "home", label: "Current wallpaper", hint: "Wallpaper in use and reset to default" },
+  { tab: "home", label: "Language", hint: "Change the OS language / idiom" },
+  { tab: "home", label: "Color mode", hint: "Bright (light) or black (dark)" },
+  { tab: "personalization", label: "Wallpaper", hint: "Desktop background and lock screen" },
+  { tab: "personalization", label: "Reset to default wallpaper", hint: "Restore the Vertex Studios wallpaper" },
+  { tab: "widgets", label: "Music widgets", hint: "Apple-style now playing widgets for Spicetify and VerTube" },
+  { tab: "account", label: "Account name", hint: "The name shown on this device" },
+  { tab: "account", label: "Email address", hint: "The Gmail you are signed in with" },
+  { tab: "account", label: "Profile picture", hint: "Change your avatar" },
+  { tab: "account", label: "Password", hint: "Lock screen password" },
+  { tab: "system", label: "Performance", hint: "Optimization, fast boot, idle lock" },
+  { tab: "system", label: "System style", hint: "Switch between Vertex-OS and macOS looks" },
+  { tab: "colors", label: "Color mode", hint: "Bright or black theme" },
+  { tab: "language", label: "Language & region", hint: "Idiom and formatting" },
+  { tab: "privacy", label: "Cloak", hint: "Disguise the browser tab" },
+  { tab: "privacy", label: "Adblock", hint: "Redirect ads to another page" },
+  { tab: "privacy", label: "Panic key", hint: "Instantly hide Vertex-OS" },
+  { tab: "about", label: "About Vertex-OS", hint: "Version and FAQ" },
+  { tab: "about", label: "FAQ", hint: "Common questions" },
+];
+
+function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic, avatar, accountName, accountEmail, onAvatarChange, onAccountChange, appliedWallpaper, appliedLockWallpaper, onApplyWallpaper, onNotify }: {
   settings: SystemSettings;
   updateSetting: (key: keyof SystemSettings, value: boolean | string) => void;
   faqOpen: number | null;
@@ -3263,15 +5931,73 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, o
   lang: Lang;
   onLanguagePick: (language: Lang) => void;
   onPanic: () => void;
+  avatar?: string;
+  accountName?: string;
+  accountEmail?: string;
+  onAvatarChange?: (avatar: string) => void;
+  onAccountChange?: (patch: { name?: string; email?: string }) => void;
+  appliedWallpaper: WallpaperId;
+  appliedLockWallpaper: WallpaperId;
+  onApplyWallpaper?: (id: WallpaperId, target: "both" | "home" | "lock") => void;
+  onNotify?: (title: string, copy: string) => void;
 }) {
   const faqs = [
     [t("set.faq1q"), t("set.faq1a")],
     [t("set.faq2q"), t("set.faq2a")],
   ];
+  const [tab, setTab] = useState<SettingsTabId>("home");
+  const [query, setQuery] = useState("");
+  const [nameDraft, setNameDraft] = useState(accountName ?? "");
+  const [emailDraft, setEmailDraft] = useState(accountEmail ?? "");
+  const [deviceDraft, setDeviceDraft] = useState(settings.deviceName);
   const [passwordDraft, setPasswordDraft] = useState("");
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [blankNotice, setBlankNotice] = useState<string | null>(null);
   const hasPassword = Boolean(storage.read<string>(PASSWORD_KEY, ""));
+
+  const applySystemStyle = (style: SystemStyle) => {
+    if (settings.systemStyle === style) return;
+    const prompt = style === "macos"
+      ? "Switch to the macOS style? Vertex-OS will restart and return you to the sign-in screen."
+      : "Switch back to the default Vertex-OS style? Vertex-OS will restart and return you to the sign-in screen.";
+    if (typeof window !== "undefined" && !window.confirm(prompt)) return;
+    updateSetting("systemStyle", style);
+    if (style === "macos") {
+      onApplyWallpaper?.("macos-default", "home");
+      onApplyWallpaper?.("macos-lock", "lock");
+    } else {
+      onApplyWallpaper?.(SEASON_WALLPAPER, "both");
+    }
+    window.setTimeout(() => window.location.reload(), 220);
+  };
+
+  useEffect(() => { setNameDraft(accountName ?? ""); }, [accountName]);
+  useEffect(() => { setEmailDraft(accountEmail ?? ""); }, [accountEmail]);
+  useEffect(() => { setDeviceDraft(settings.deviceName); }, [settings.deviceName]);
+
+  const currentHome = wallpapers.find((w) => w.id === appliedWallpaper);
+  const currentLock = wallpapers.find((w) => w.id === appliedLockWallpaper);
+  const wallThumb = (id: string) => (id === "vertex-studio" ? asset("images/vertex-studios-thumb.svg") : wallImg(id));
+  const avatarNode = avatar ? <AvatarGlyph value={avatar} name={accountName ?? "?"} size={40} /> : <span>{(accountName ?? "?").slice(0, 1).toUpperCase()}</span>;
+
+  const saveProfile = () => {
+    const patch: { name?: string; email?: string } = {};
+    const name = nameDraft.trim();
+    const email = emailDraft.trim();
+    if (name && name !== (accountName ?? "")) patch.name = name;
+    if (email !== (accountEmail ?? "")) patch.email = email;
+    if (!Object.keys(patch).length) { onNotify?.("Nothing to save", "Your account details are already up to date."); return; }
+    onAccountChange?.(patch);
+    onNotify?.("Account updated", "Your name and email were saved.");
+  };
+  const saveDevice = () => {
+    const name = deviceDraft.trim();
+    if (!name) { onNotify?.("Device name required", "Enter a name for this device."); return; }
+    updateSetting("deviceName", name);
+    onNotify?.("Device renamed", `This device is now called "${name}".`);
+  };
+  const resetWallpaper = (target: "both" | "home" | "lock") => { onApplyWallpaper?.("vertex-studio", target); };
+  const results = query.trim() ? SETTINGS_SEARCH.filter((entry) => `${entry.label} ${entry.hint}`.toLowerCase().includes(query.trim().toLowerCase())) : [];
   const openBlankTab = () => {
     const cloak = settings.cloak === "custom"
       ? { title: settings.cloakName || CLOAKS.none.title, icon: settings.cloakIcon || CLOAKS.none.icon }
@@ -3288,33 +6014,275 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, o
     doc.close();
     win.focus();
   };
-  return <div className="window-surface"><div className="surface-kicker">{t("set.kicker")}</div><h2 className="surface-title">{t("set.title")}</h2><p className="surface-copy">{t("set.copy")}</p><div className="settings-list">
-    <div className="setting-group"><Cpu size={13} /> {t("set.groupPerf")}</div>
-    <SettingToggle label={t("set.optLabel")} help={t("set.optHelp")} value={settings.optimized} onChange={(value) => updateSetting("optimized", value)} />
-    <SettingToggle label={t("set.fastBootLabel")} help={t("set.fastBootHelp")} value={settings.fastBoot} onChange={(value) => updateSetting("fastBoot", value)} />
-    <SettingToggle label={t("set.idleLabel")} help={t("set.idleHelp")} value={settings.idleLock} onChange={(value) => updateSetting("idleLock", value)} />
-    <SettingToggle label={t("set.confirmLabel")} help={t("set.confirmHelp")} value={settings.confirm} onChange={(value) => updateSetting("confirm", value)} />
-    <div className="setting-group"><LockKeyhole size={13} /> {t("set.groupSecurity")}</div>
-    <div className="setting-row setting-stack"><div><strong>{t("set.passwordLabel")}</strong><small>{t("set.passwordHelp")}</small></div><input className="setting-input" type="password" placeholder={t("set.passwordPlaceholder")} value={passwordDraft} onChange={(event) => { setPasswordDraft(event.target.value); setPasswordSaved(false); }} aria-label={t("set.passwordLabel")} /></div>
-    <div className="setting-action-row"><button className="outline-button" onClick={() => { storage.write(PASSWORD_KEY, passwordDraft.trim()); setPasswordSaved(true); setPasswordDraft(""); }}>{t("set.passwordSave")}</button><span>{passwordSaved ? t("set.passwordSaved") : (hasPassword ? t("set.passwordSet") : t("set.passwordNone"))}</span></div>
-     <div className="setting-row"><div><strong>{t("set.appLangLabel")}</strong><small>{t("set.appLangHelp")}</small></div><select className="setting-select" value={lang} onChange={(event) => onLanguagePick(event.target.value as Lang)} aria-label={t("set.appLangLabel")}>{LANGS.map((option) => <option key={option.code} value={option.code}>{option.native}</option>)}</select></div>
-     {lang !== LANG && <div className="setting-action-row"><button className="outline-button" onClick={() => location.reload()}>{t("set.reload")}</button><span>{t("set.restartNote")}</span></div>}
-    <div className="setting-group"><LockKeyhole size={13} /> {t("set.groupCloak")}</div>
-    <div className="setting-row"><div><strong>{t("set.cloakLabel")}</strong><small>{t("set.cloakHelp")}</small></div><select className="setting-select" value={settings.cloak} onChange={(event) => updateSetting("cloak", event.target.value)} aria-label={t("set.cloakLabel")}><option value="none">{t("set.cloakNone")}</option><option value="google">{t("set.cloakGoogle")}</option><option value="classroom">{t("set.cloakClassroom")}</option><option value="custom">{t("set.cloakCustom")}</option></select></div>
-    {settings.cloak === "custom" && <div className="setting-row setting-stack"><div><strong>{t("set.customNameLabel")}</strong><small>{t("set.cloakHelp")}</small></div><input className="setting-input" value={settings.cloakName} placeholder="Vertex-OS" onChange={(event) => updateSetting("cloakName", event.target.value)} aria-label={t("set.customNameLabel")} /></div>}
-    {settings.cloak === "custom" && <div className="setting-row setting-stack"><div><strong>{t("set.customIconLabel")}</strong><small>{t("set.cloakHelp")}</small></div><input className="setting-input setting-url" type="text" value={settings.cloakIcon} placeholder="https://example.com/logo.png" onChange={(event) => updateSetting("cloakIcon", event.target.value)} aria-label={t("set.customIconLabel")} /></div>}
-    <div className="setting-action-row"><button className="outline-button" onClick={openBlankTab}>Open in about:blank</button><span>Runs the OS in a new tab — the URL bar shows only <b>about:blank</b>. Close the original tab after.</span></div>
-    {blankNotice && <p className="term-error">{blankNotice}</p>}
-    <div className="setting-group"><MonitorCog size={13} /> {t("set.groupShortcut")}</div>
-     <div className="setting-row"><div><strong>{t("set.panicKeyLabel")}</strong><small>{t("set.panicKeyHelp")}</small></div><input className="setting-input" value={settings.panicKey} maxLength={1} onChange={(event) => updateSetting("panicKey", event.target.value)} aria-label={t("set.panicKeyLabel")} /></div>
-     <div className="setting-row setting-stack"><div><strong>{t("set.panicSiteLabel")}</strong><small>{t("set.panicSiteHelp")}</small></div><input className="setting-input setting-url" type="url" value={settings.panicUrl} placeholder="https://classroom.google.com/" onChange={(event) => updateSetting("panicUrl", event.target.value)} aria-label={t("set.panicSiteLabel")} /></div>
-     <div className="setting-action-row"><button className="outline-button" onClick={onPanic}>{t("set.testPanic")}</button><span>{t("set.opensHere")}</span></div>
-    <div className="setting-group"><ShieldBan size={13} /> {t("set.groupAdblock")}</div>
-    <SettingToggle label={t("set.adblockLabel")} help={t("set.adblockHelp")} value={settings.adblock} onChange={(value) => updateSetting("adblock", value)} />
-    {settings.adblock && <div className="setting-row setting-stack"><div><strong>{t("set.adblockTargetLabel")}</strong><small>{t("set.adblockTargetHelp")}</small></div><input className="setting-input setting-url" type="url" value={settings.adblockUrl} placeholder="https://hideout-now.lovable.app/" onChange={(event) => updateSetting("adblockUrl", event.target.value)} aria-label={t("set.adblockTargetLabel")} /></div>}
-    <button className="setting-row" onClick={() => setFaqOpen(faqOpen === 0 ? null : 0)}><div><strong><CircleHelp size={14} /> {t("set.faqButton")}</strong><small>{t("set.faqHelp")}</small></div><ChevronDown size={16} /></button>
-    {faqOpen !== null && <div className="faq-list">{faqs.map(([question, answer], index) => <div className="faq-item" key={question}><button onClick={() => setFaqOpen(faqOpen === index ? null : index)}>{question}<ChevronDown size={15} /></button>{faqOpen === index && <div className="faq-answer">{answer}</div>}</div>)}</div>}
-  </div></div>;
+  const renderPane = () => {
+    switch (tab) {
+      case "home":
+        return <>
+          <h2>Home</h2>
+          <p className="win-settings-sub">A snapshot of this device and your account.</p>
+          <section className="win-settings-card">
+            <div className="win-settings-userbig">
+              <span className={`win-settings-avatar lg ${avatar ? "has-img" : ""}`}>{avatar ? <AvatarGlyph value={avatar} name={accountName ?? "?"} size={56} /> : <span>{(accountName ?? "?").slice(0, 1).toUpperCase()}</span>}</span>
+              <div><strong>{accountName ?? "Not signed in"}</strong><span>{accountEmail || "No email set"}</span></div>
+              <button className="outline-button" onClick={() => setTab("account")}>Manage account</button>
+            </div>
+          </section>
+          <section className="win-settings-card">
+            <div className="win-settings-row">
+              <div><strong>Device name</strong><small>The name Vertex-OS shows for this device</small></div>
+              <div className="win-settings-inline">
+                <input className="setting-input" value={deviceDraft} onChange={(event) => setDeviceDraft(event.target.value)} aria-label="Device name" />
+                <button className="outline-button" onClick={saveDevice}>Rename</button>
+              </div>
+            </div>
+            <div className="win-settings-row">
+              <div><strong>Current wallpaper</strong><small>{currentHome?.name ?? appliedWallpaper} · {currentHome?.meta ?? "Custom"}</small></div>
+              <div className="win-settings-inline">
+                <button className="outline-button" onClick={() => resetWallpaper("home")}><RotateCcw size={13} /> Default</button>
+                <button className="outline-button" onClick={() => setTab("personalization")}>Change</button>
+              </div>
+            </div>
+            <div className="win-settings-row">
+              <div><strong>Language</strong><small>Your idiom across the whole system</small></div>
+              <select className="setting-select" value={lang} onChange={(event) => onLanguagePick(event.target.value as Lang)} aria-label="Language">{LANGS.map((option) => <option key={option.code} value={option.code}>{option.native}</option>)}</select>
+            </div>
+            <div className="win-settings-row">
+              <div><strong>Color mode</strong><small>Bright or black appearance</small></div>
+              <div className="win-seg" role="group" aria-label="Color mode">
+                <button className={settings.colorMode === "light" ? "active" : ""} onClick={() => updateSetting("colorMode", "light")}>Bright</button>
+                <button className={settings.colorMode === "dark" ? "active" : ""} onClick={() => updateSetting("colorMode", "dark")}>Black</button>
+              </div>
+            </div>
+          </section>
+          {lang !== LANG && <div className="setting-action-row"><button className="outline-button" onClick={() => location.reload()}>{t("set.reload")}</button><span>{t("set.restartNote")}</span></div>}
+        </>;
+      case "personalization":
+        return <>
+          <h2>Personalization</h2>
+          <p className="win-settings-sub">Pick your desktop background and lock screen wallpaper.</p>
+          <section className="win-settings-card">
+            <div className="win-settings-wp-hero">
+              <span className="win-settings-wp-preview">{wallThumb(appliedWallpaper) ? <img src={wallThumb(appliedWallpaper) as string} alt="" /> : <span className="win-settings-wp-fallback">{currentHome?.name ?? "Wallpaper"}</span>}</span>
+              <div>
+                <strong>{currentHome?.name ?? appliedWallpaper}</strong>
+                <small>{currentHome?.meta ?? "Custom wallpaper"}</small>
+                <p className="win-settings-sub">Lock screen: {currentLock?.name ?? appliedLockWallpaper}</p>
+              </div>
+            </div>
+            <div className="win-settings-inline wrap">
+              <button className="outline-button" onClick={() => resetWallpaper("home")}><RotateCcw size={13} /> Reset desktop to default</button>
+              <button className="outline-button" onClick={() => resetWallpaper("lock")}><RotateCcw size={13} /> Reset lock to default</button>
+              <button className="outline-button" onClick={() => resetWallpaper("both")}><RotateCcw size={13} /> Reset both</button>
+            </div>
+          </section>
+          <section className="win-settings-card">
+            <div className="setting-group"><Palette size={13} /> Built-in wallpapers</div>
+            <div className="win-settings-wp-grid">
+              {wallpapers.map((wall) => (
+                <button key={wall.id} className={`win-settings-wp ${appliedWallpaper === wall.id ? "active" : ""}`} onClick={() => onApplyWallpaper?.(wall.id, "home")} title={wall.name} aria-label={wall.name}>
+                  {wallThumb(wall.id) ? <img src={wallThumb(wall.id) as string} alt="" /> : <span className="win-settings-wp-fallback">{wall.name}</span>}
+                  <span>{wall.name}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </>;
+      case "widgets":
+        return <>
+          <h2>Widgets</h2>
+          <p className="win-settings-sub">Add movable, stylable music widgets that show what is playing.</p>
+          <MusicWidgetManager />
+          <LockAppsManager catalog={apps.map((app) => ({ id: app.id, title: app.title }))} />
+        </>;
+      case "account":
+        return <>
+          <h2>Account</h2>
+          <p className="win-settings-sub">Your profile on this device.</p>
+          <section className="win-settings-card">
+            <div className="win-settings-userbig">
+              <span className={`win-settings-avatar lg ${avatar ? "has-img" : ""}`}>{avatar ? <AvatarGlyph value={avatar} name={accountName ?? "?"} size={56} /> : <span>{(accountName ?? "?").slice(0, 1).toUpperCase()}</span>}</span>
+              <div><strong>{accountName ?? "Not signed in"}</strong><span>{accountEmail || "No email set"}</span></div>
+            </div>
+            <div className="win-settings-row setting-stack">
+              <div><strong>Full name</strong><small>Shown on the lock screen and start menu</small></div>
+              <input className="setting-input" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} placeholder="Your name" aria-label="Account name" />
+            </div>
+            <div className="win-settings-row setting-stack">
+              <div><strong>Email address</strong><small>The Gmail you are signed in with</small></div>
+              <input className="setting-input setting-url" type="email" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="you@gmail.com" aria-label="Email address" />
+            </div>
+            <div className="setting-action-row"><button className="outline-button" onClick={saveProfile}>Save changes</button><span>Updates your name and email.</span></div>
+          </section>
+          {onAvatarChange && <section className="win-settings-card">
+            <div className="setting-group"><Image size={13} /> Profile picture</div>
+            <div className="profile-avatar-row settings-avatar-row">
+              <span className={`profile-avatar-preview sm ${avatar ? "has-img" : ""}`}>{avatar ? <AvatarGlyph value={avatar} name={accountName ?? "?"} size={56} /> : <span className="profile-avatar-glyph">{(accountName ?? "?").slice(0, 1).toUpperCase()}</span>}</span>
+              <label className="profile-avatar-upload"><Image size={14} /> Upload picture or GIF
+                <input type="file" accept="image/*,.gif" onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file || !onAvatarChange) return;
+                  void avatarFromFile(file).then(onAvatarChange);
+                }} />
+              </label>
+              <span className="profile-avatar-presets-mini">
+                {PRESET_AVATARS.slice(0, 8).map((glyph) => (
+                  <button key={glyph} type="button" className={`profile-avatar-preset ${avatar === `preset:${glyph}` ? "selected" : ""}`} onClick={() => onAvatarChange(`preset:${glyph}`)} aria-label={glyph}>{glyph}</button>
+                ))}
+              </span>
+            </div>
+          </section>}
+          <section className="win-settings-card">
+            <div className="setting-group"><LockKeyhole size={13} /> {t("set.groupSecurity")}</div>
+            <div className="setting-row setting-stack"><div><strong>{t("set.passwordLabel")}</strong><small>{t("set.passwordHelp")}</small></div><input className="setting-input" type="password" placeholder={t("set.passwordPlaceholder")} value={passwordDraft} onChange={(event) => { setPasswordDraft(event.target.value); setPasswordSaved(false); }} aria-label={t("set.passwordLabel")} /></div>
+            <div className="setting-action-row"><button className="outline-button" onClick={() => { window.dispatchEvent(new CustomEvent("vertex-set-password", { detail: passwordDraft.trim() })); setPasswordSaved(true); setPasswordDraft(""); }}>{t("set.passwordSave")}</button><span>{passwordSaved ? t("set.passwordSaved") : (hasPassword ? t("set.passwordSet") : t("set.passwordNone"))}</span></div>
+          </section>
+        </>;
+      case "system":
+        return <>
+          <h2>System</h2>
+          <p className="win-settings-sub">Device details and performance options.</p>
+          <section className="win-settings-card">
+            <div className="setting-group"><Monitor size={13} /> System style</div>
+            <p className="win-settings-note">Choose the overall look of Vertex-OS. Switching restarts the system and returns you to the sign-in screen.</p>
+            <div className="win-settings-choice">
+              <button className={`win-settings-choice-card ${settings.systemStyle !== "macos" ? "active" : ""}`} onClick={() => applySystemStyle("vertex")}><span className="win-settings-choice-swatch vertex" /><strong>Vertex-OS</strong><small>Default windows, dock and accent</small></button>
+              <button className={`win-settings-choice-card ${settings.systemStyle === "macos" ? "active" : ""}`} onClick={() => applySystemStyle("macos")}><span className="win-settings-choice-swatch macos" /><strong>macOS 27 · Golden Gate</strong><small>Apple-style menu bar, windows and wallpaper</small></button>
+            </div>
+          </section>
+          <section className="win-settings-card">
+            <div className="win-settings-row">
+              <div><strong>Device name</strong><small>Shown in Config and the sign-in flow</small></div>
+              <div className="win-settings-inline">
+                <input className="setting-input" value={deviceDraft} onChange={(event) => setDeviceDraft(event.target.value)} aria-label="Device name" />
+                <button className="outline-button" onClick={saveDevice}>Rename</button>
+              </div>
+            </div>
+          </section>
+          <section className="win-settings-card">
+            <div className="setting-group"><Cpu size={13} /> {t("set.groupPerf")}</div>
+            <SettingToggle label={t("set.optLabel")} help={t("set.optHelp")} value={settings.optimized} onChange={(value) => updateSetting("optimized", value)} />
+            <SettingToggle label={t("set.fastBootLabel")} help={t("set.fastBootHelp")} value={settings.fastBoot} onChange={(value) => updateSetting("fastBoot", value)} />
+            <SettingToggle label={t("set.idleLabel")} help={t("set.idleHelp")} value={settings.idleLock} onChange={(value) => updateSetting("idleLock", value)} />
+            <SettingToggle label={t("set.confirmLabel")} help={t("set.confirmHelp")} value={settings.confirm} onChange={(value) => updateSetting("confirm", value)} />
+          </section>
+        </>;
+      case "colors":
+        return <>
+          <h2>Color mode</h2>
+          <p className="win-settings-sub">Choose how Vertex-OS looks. Black is the classic dark theme, Bright is a light theme.</p>
+          <section className="win-settings-card">
+            <div className="win-settings-choice">
+              <button className={`win-settings-choice-card ${settings.colorMode === "dark" ? "active" : ""}`} onClick={() => updateSetting("colorMode", "dark")}><span className="win-settings-choice-swatch dark" /><strong>Black</strong><small>Dark surfaces, glowing accents</small></button>
+              <button className={`win-settings-choice-card ${settings.colorMode === "light" ? "active" : ""}`} onClick={() => updateSetting("colorMode", "light")}><span className="win-settings-choice-swatch light" /><strong>Bright</strong><small>Light surfaces, dark text</small></button>
+            </div>
+          </section>
+        </>;
+      case "language":
+        return <>
+          <h2>Language &amp; region</h2>
+          <p className="win-settings-sub">Pick the idiom Vertex-OS uses across windows.</p>
+          <section className="win-settings-card">
+            <div className="win-settings-row">
+              <div><strong>{t("set.appLangLabel")}</strong><small>{t("set.appLangHelp")}</small></div>
+              <select className="setting-select" value={lang} onChange={(event) => onLanguagePick(event.target.value as Lang)} aria-label={t("set.appLangLabel")}>{LANGS.map((option) => <option key={option.code} value={option.code}>{option.native}</option>)}</select>
+            </div>
+            {lang !== LANG && <div className="setting-action-row"><button className="outline-button" onClick={() => location.reload()}>{t("set.reload")}</button><span>{t("set.restartNote")}</span></div>}
+          </section>
+        </>;
+      case "privacy":
+        return <>
+          <h2>Privacy &amp; security</h2>
+          <p className="win-settings-sub">Disguise the tab, block ads, and hide everything fast.</p>
+          <section className="win-settings-card">
+            <div className="setting-group"><LockKeyhole size={13} /> {t("set.groupCloak")}</div>
+            <div className="setting-row"><div><strong>{t("set.cloakLabel")}</strong><small>{t("set.cloakHelp")}</small></div><select className="setting-select" value={settings.cloak} onChange={(event) => updateSetting("cloak", event.target.value)} aria-label={t("set.cloakLabel")}><option value="none">{t("set.cloakNone")}</option><option value="google">{t("set.cloakGoogle")}</option><option value="classroom">{t("set.cloakClassroom")}</option><option value="custom">{t("set.cloakCustom")}</option></select></div>
+            {settings.cloak === "custom" && <div className="setting-row setting-stack"><div><strong>{t("set.customNameLabel")}</strong><small>{t("set.cloakHelp")}</small></div><input className="setting-input" value={settings.cloakName} placeholder="Vertex-OS" onChange={(event) => updateSetting("cloakName", event.target.value)} aria-label={t("set.customNameLabel")} /></div>}
+            {settings.cloak === "custom" && <div className="setting-row setting-stack"><div><strong>{t("set.customIconLabel")}</strong><small>{t("set.cloakHelp")}</small></div><input className="setting-input setting-url" type="text" value={settings.cloakIcon} placeholder="https://example.com/logo.png" onChange={(event) => updateSetting("cloakIcon", event.target.value)} aria-label={t("set.customIconLabel")} /></div>}
+            <div className="setting-action-row"><button className="outline-button" onClick={openBlankTab}>Open in about:blank</button><span>Runs the OS in a new tab — the URL bar shows only <b>about:blank</b>. Close the original tab after.</span></div>
+            {blankNotice && <p className="term-error">{blankNotice}</p>}
+          </section>
+          <section className="win-settings-card">
+            <div className="setting-group"><MonitorCog size={13} /> {t("set.groupShortcut")}</div>
+            <div className="setting-row"><div><strong>{t("set.panicKeyLabel")}</strong><small>{t("set.panicKeyHelp")}</small></div><input className="setting-input" value={settings.panicKey} maxLength={1} onChange={(event) => updateSetting("panicKey", event.target.value)} aria-label={t("set.panicKeyLabel")} /></div>
+            <div className="setting-row setting-stack"><div><strong>{t("set.panicSiteLabel")}</strong><small>{t("set.panicSiteHelp")}</small></div><input className="setting-input setting-url" type="url" value={settings.panicUrl} placeholder="https://classroom.google.com/" onChange={(event) => updateSetting("panicUrl", event.target.value)} aria-label={t("set.panicSiteLabel")} /></div>
+            <div className="setting-action-row"><button className="outline-button" onClick={onPanic}>{t("set.testPanic")}</button><span>{t("set.opensHere")}</span></div>
+          </section>
+          <section className="win-settings-card">
+            <div className="setting-group"><ShieldBan size={13} /> {t("set.groupAdblock")}</div>
+            <SettingToggle label={t("set.adblockLabel")} help={t("set.adblockHelp")} value={settings.adblock} onChange={(value) => updateSetting("adblock", value)} />
+            {settings.adblock && <div className="setting-row setting-stack"><div><strong>{t("set.adblockTargetLabel")}</strong><small>{t("set.adblockTargetHelp")}</small></div><input className="setting-input setting-url" type="url" value={settings.adblockUrl} placeholder="https://hideout-now.lovable.app/" onChange={(event) => updateSetting("adblockUrl", event.target.value)} aria-label={t("set.adblockTargetLabel")} /></div>}
+          </section>
+        </>;
+      case "about":
+        return <>
+          <h2>About</h2>
+          <p className="win-settings-sub">Vertex-OS {VERTEX_VERSION} · {settings.deviceName}</p>
+          <section className="win-settings-card">
+            <div className="win-settings-row"><div><strong>Version</strong><small>Vertex-OS build</small></div><span className="win-settings-badge">v{VERTEX_VERSION}</span></div>
+            <div className="win-settings-row"><div><strong>Device</strong><small>This machine</small></div><span className="win-settings-badge">{settings.deviceName}</span></div>
+            <div className="win-settings-row"><div><strong>Account</strong><small>Signed in</small></div><span className="win-settings-badge">{accountName ?? "—"}</span></div>
+          </section>
+          <section className="win-settings-card">
+            <button className="setting-row" onClick={() => setFaqOpen(faqOpen === 0 ? null : 0)}><div><strong><CircleHelp size={14} /> {t("set.faqButton")}</strong><small>{t("set.faqHelp")}</small></div><ChevronDown size={16} /></button>
+            {faqOpen !== null && <div className="faq-list">{faqs.map(([question, answer], index) => <div className="faq-item" key={question}><button onClick={() => setFaqOpen(faqOpen === index ? null : index)}>{question}<ChevronDown size={15} /></button>{faqOpen === index && <div className="faq-answer">{answer}</div>}</div>)}</div>}
+          </section>
+        </>;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="window-surface win-settings">
+      <header className="win-settings-top">
+        <div className="win-settings-user">
+          <span className={`win-settings-avatar ${avatar ? "has-img" : ""}`}>{avatarNode}</span>
+          <div><strong>{accountName ?? "Not signed in"}</strong><span>{accountEmail || "No email set"}</span></div>
+        </div>
+        <label className="win-settings-search">
+          <Search size={15} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search settings" aria-label="Search settings" />
+        </label>
+      </header>
+      <div className="win-settings-body">
+        <nav className="win-settings-nav" aria-label="Settings sections">
+          {SETTINGS_TABS.map((item) => {
+            const Icon = item.icon;
+            return <button key={item.id} className={tab === item.id && !query.trim() ? "active" : ""} onClick={() => { setQuery(""); setTab(item.id); }}><Icon size={17} /> {item.label}</button>;
+          })}
+        </nav>
+        <div className="win-settings-pane">
+          {query.trim() ? (
+            <>
+              <h2>Search</h2>
+              <p className="win-settings-sub">{results.length} result{results.length === 1 ? "" : "s"} for “{query}”</p>
+              {results.length ? results.map((entry, index) => (
+                <button key={`${entry.tab}-${index}`} className="win-settings-result" onClick={() => { setTab(entry.tab); setQuery(""); }}>
+                  <strong>{entry.label}</strong><small>{entry.hint}</small>
+                </button>
+              )) : <p className="win-settings-sub">No settings match your search.</p>}
+            </>
+          ) : renderPane()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TrackArt({ track, size }: { track: CinefyTrack; size?: number }) {
+  const style = size ? { width: size, height: size } : undefined;
+  if (track.artworkUrl100 && track.artworkUrl100.startsWith("http")) {
+    return <img src={track.artworkUrl100} alt="" style={style} />;
+  }
+  const initials = (track.trackName || "·").split(/[^a-zA-Z0-9]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  return <span className="cinefy-art-fallback" style={{ ...style, background: track.color || "linear-gradient(135deg,#1db954,#0b84ff)" }}>{initials}</span>;
+}
+
+function EqBars({ playing, small }: { playing?: boolean; small?: boolean }) {
+  return <span className={`cinefy-eq ${small ? "small" : ""} ${playing ? "on" : ""}`} aria-hidden="true">
+    <span /><span /><span /><span /><span />
+  </span>;
 }
 
 function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => void; onMinimize: () => void; onTrackChange: (track: { name: string; artist: string; artwork: string } | null) => void }) {
@@ -3332,6 +6300,11 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   const [volume, setVolume] = useState(0.82);
   const [favorites, setFavorites] = useState<number[]>(() => storage.read("cinefy-favorites", []));
   const [trackCache, setTrackCache] = useState<TrackCache>(() => storage.read("cinefy-track-cache", {}));
+  const [fullMode, setFullMode] = useState(true);
+  const [repeat, setRepeat] = useState(false);
+  const [shuffle, setShuffle] = useState(false);
+  const [fullToast, setFullToast] = useState<string | null>(null);
+  const fullToastTimer = useRef(0);
   const [playlists, setPlaylists] = useState<Playlist[]>(() => storage.read("cinefy-playlists", []));
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
   const [newPlaylistName, setNewPlaylistName] = useState("");
@@ -3370,6 +6343,7 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
     }));
   }, []);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const musicSessionRef = useRef<MediaSession | null>(null);
   const notifTimer = useRef<number>(0);
 
   const hazyActive = activeTheme === "hazy" && hazy.enabled && installed.includes("hazy-astromations");
@@ -3474,6 +6448,262 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
     void loadHome();
   }, []);
 
+  function archiveIdHash(id: string): number {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return h;
+  }
+
+  async function searchFull(term: string) {
+    const cleanTerm = term.trim();
+    if (!cleanTerm) return;
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams();
+      params.set("q", `${cleanTerm} AND mediatype:audio`);
+      params.append("fl[]", "identifier");
+      params.append("fl[]", "title");
+      params.append("fl[]", "creator");
+      params.set("rows", "4");
+      params.set("output", "json");
+      const response = await fetch(`https://archive.org/advancedsearch.php?${params.toString()}`);
+      if (!response.ok) throw new Error("Full-length search unavailable");
+      const data = await response.json() as { response?: { docs?: { identifier?: string; title?: string; creator?: string }[] } };
+      const docs = (data.response?.docs ?? []).slice(0, 6).filter((d) => d.identifier && d.title);
+      const out: CinefyTrack[] = [];
+      for (const doc of docs) {
+        try {
+          const id = doc.identifier!;
+          const meta = await (await fetch(`https://archive.org/metadata/${encodeURIComponent(id)}`)).json() as {
+            files?: { name?: string; format?: string; length?: string | number }[];
+            metadata?: { creator?: string; title?: string };
+          };
+          const mp3s = (meta.files ?? []).filter((f) => (f.format ?? "").toLowerCase().includes("mp3") && !/\.(mp3\.zip|tar)/i.test(f.name ?? ""));
+          const song = mp3s.find((f) => Number(f.length) > 300000) || mp3s[0];
+          if (!song?.name) continue;
+          const imgs = (meta.files ?? []).filter((f) => /\.(jpe?g|png)$/i.test(f.name ?? "") && !/^(__ia|_)/.test(f.name ?? "") && !/(spectrogram|thumb)/i.test(f.name ?? ""));
+          const img = imgs.sort((a, b) => (b.name ?? "").length - (a.name ?? "").length)[0];
+          const enc = (name: string | undefined) => (name ?? "").split("/").map((p) => encodeURIComponent(p)).join("/");
+          const name = song.name.replace(/\.mp3$/i, "").replace(/[_]+/g, " ").trim();
+          const parts = name.split(" - ");
+          const trackName = parts.length > 1 ? parts.slice(1).join(" - ") : name;
+          const artistName = (parts.length > 1 ? parts[0] : meta.metadata?.creator || doc.creator) || "Open Library";
+          out.push({
+            trackId: archiveIdHash(id),
+            trackName,
+            artistName,
+            collectionName: doc.title || "Full Length",
+            artworkUrl100: img ? `https://archive.org/download/${enc(id)}/${enc(img.name)}` : `https://picsum.photos/seed/${id}/600/600`,
+            previewUrl: "",
+            trackViewUrl: `https://archive.org/details/${id}`,
+            primaryGenreName: "Full Length",
+            fullUrl: `https://archive.org/download/${enc(id)}/${enc(song.name)}`,
+          });
+        } catch { /* skip unreachable item */ }
+      }
+      setTracks(out);
+      cacheTracks(out);
+      if (!out.length) setError(t("sp.noResults"));
+    } catch {
+      setError(t("sp.relayError"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function runSearch(term: string) {
+    if (fullMode) void searchFull(term);
+    else void searchTracks(term);
+  }
+
+  function flashFull(msg: string) {
+    window.clearTimeout(fullToastTimer.current);
+    setFullToast(msg);
+    fullToastTimer.current = window.setTimeout(() => setFullToast(null), 5200);
+  }
+
+  async function archiveMirror(artist: string, title: string): Promise<{ url: string; art?: string; name: string } | null> {
+    const tToks = normTags(title).split(" ").filter(Boolean);
+    const aToks = normTags(artist).split(" ").filter(Boolean);
+    const queries = [`"${artist}" "${title}" AND mediatype:audio`, `"${title}" "${artist}"`, `"${title}"`];
+    for (const q of queries) {
+      try {
+        const params = new URLSearchParams();
+        params.set("q", q);
+        params.append("fl[]", "identifier");
+        params.append("fl[]", "title");
+        params.append("fl[]", "creator");
+        params.set("rows", "6");
+        params.set("output", "json");
+        const response = await fetch(`https://archive.org/advancedsearch.php?${params.toString()}`);
+        if (!response.ok) continue;
+        const data = await response.json() as { response?: { docs?: { identifier?: string; title?: string; creator?: string }[] } };
+        const docs = (data.response?.docs ?? []).filter((d) => d.identifier);
+        if (!docs.length) continue;
+        for (const doc of docs.slice(0, 6)) {
+          try {
+            const id = doc.identifier!;
+            const meta = await (await fetch(`https://archive.org/metadata/${encodeURIComponent(id)}`)).json() as {
+              files?: { name?: string; format?: string; length?: string | number }[];
+              metadata?: { title?: string; creator?: string };
+            };
+            const mp3s = (meta.files ?? []).filter((f) => (f.format ?? "").toLowerCase().includes("mp3") && !/\.(mp3\.zip|tar)/i.test(f.name ?? ""));
+            const mp3 = mp3s.find((f) => Number(f.length) > 300000) || mp3s[0];
+            if (!mp3?.name) continue;
+            const normalized = normTags(`${doc.title} ${meta.metadata?.title || ""} ${mp3.name}`);
+            const creatorNorm = normTags(`${doc.creator || ""} ${meta.metadata?.creator || ""}`);
+            let score = 0;
+            for (const t of tToks) if (normalized.includes(t)) score += 2;
+            for (const a of aToks) if (normalized.includes(a) || creatorNorm.includes(a)) score += 1;
+            if (score < 3) continue;
+            const enc = (name: string | undefined) => (name ?? "").split("/").map((p) => encodeURIComponent(p)).join("/");
+            const imgs = (meta.files ?? []).filter((f) => /\.(jpe?g|png)$/i.test(f.name ?? "") && !/^(__ia|_)/.test(f.name ?? "") && !/(spectrogram|thumb)/i.test(f.name ?? ""));
+            const img = imgs.sort((a, b) => (b.name ?? "").length - (a.name ?? "").length)[0];
+            const name = mp3.name.replace(/\.mp3$/i, "").replace(/[_]+/g, " ").trim();
+            return { url: `https://archive.org/download/${enc(id)}/${enc(mp3.name)}`, art: img ? `https://archive.org/download/${enc(id)}/${enc(img.name)}` : undefined, name };
+          } catch { /* skip item */ }
+        }
+      } catch { /* next query */ }
+    }
+    return null;
+  }
+
+  function normTags(value: string | undefined) {
+    return (value || "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function pickVideo(list: { videoId?: string; title?: string; author?: string; viewCount?: number }[], tToks: string[], aToks: string[]) {
+    let best: { videoId: string; title: string; author?: string } | null = null;
+    let bestScore = 0;
+    for (const v of list) {
+      if (!v?.videoId) continue;
+      const tn = normTags(v.title);
+      const an = normTags(v.author);
+      let score = 0;
+      for (const t of tToks) if (tn.includes(t)) score += 2;
+      for (const a of aToks) if (tn.includes(a) || an.includes(a)) score += 1;
+      if (tn.includes(normTags(`${tToks.join(" ")}`))) score += 3;
+      if (/official|original|audio|mp3/i.test(tn)) score += 2;
+      if (/lyric/i.test(tn)) score += 2;
+      if (/cover|reaction|remix|mix|sped.?up|slowed|karaoke|instrumental|tribute|parody|just a|but it'?s/i.test(tn)) score -= 8;
+      if (score > bestScore) { bestScore = score; best = { videoId: v.videoId, title: v.title || "", author: v.author }; }
+    }
+    return bestScore >= 2 ? best : null;
+  }
+
+  async function audioValid(url: string): Promise<boolean> {
+    try {
+      const res = await fetch(url);
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      if (!res.ok || ct && (ct.includes("html") || ct.includes("text/"))) return false;
+      const reader = res.body?.getReader();
+      if (!reader) return ct.includes("audio") || ct.includes("octet");
+      const first = await reader.read();
+      reader.cancel().catch(() => {});
+      const head = first.value || new Uint8Array(0);
+      return head.length > 1 && head[0] !== 0x3c;
+    } catch { return false; }
+  }
+
+  async function ytExtract(artist: string, title: string): Promise<{ url: string; art: string; name: string } | null> {
+    const query = `${artist} ${title} song`;
+    const tToks = normTags(title).split(" ").filter(Boolean);
+    const aToks = normTags(artist).split(" ").filter(Boolean);
+    const cacheKey = `cinefy-full:${(artist + "|" + title).toLowerCase()}`;
+    try {
+      const cachedRaw = sessionStorage.getItem(cacheKey);
+      if (cachedRaw) {
+        const cached = JSON.parse(cachedRaw) as { url?: string; art?: string; name?: string; t?: number };
+        if (cached?.url && cached.t && Date.now() - cached.t < 20 * 60 * 1000) return cached as { url: string; art: string; name: string };
+      }
+      let hit: { videoId: string; title: string } | null = null;
+      for (const inst of ["invidious.f5.si", "yewtu.be"]) {
+        try {
+          const ac = new AbortController();
+          const timer = window.setTimeout(() => ac.abort(), 8000);
+          const searchRes = await fetch(`https://${inst}/api/v1/search?q=${encodeURIComponent(query)}&type=video&fields=videoId,title,author,viewCount`, { signal: ac.signal });
+          window.clearTimeout(timer);
+          if (!searchRes.ok) continue;
+          const list = await searchRes.json() as { videoId?: string; title?: string; author?: string; viewCount?: number }[];
+          hit = pickVideo(list, tToks, aToks);
+          if (hit) break;
+        } catch { /* try next instance */ }
+      }
+      if (!hit) return null;
+      const vid = hit.videoId;
+      const songName = (hit.title || title).replace(/\s*\(official( audio| video)?( ly[^)]*)?\)\s*$/i, "").trim() || title;
+      const rel = (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`;
+      for (let attempt = 0; attempt < 1; attempt++) {
+        try {
+          const convertRes = await fetch(rel(`https://loader.to/ajax/download.php?format=mp3&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${vid}`)}`));
+          const conv = (await convertRes.json()) as { id?: string };
+          if (!conv?.id) continue;
+          let dl: string | undefined;
+          for (let i = 0; i < 12; i++) {
+            await new Promise((r) => setTimeout(r, 1500));
+            const progRes = await fetch(rel(`https://loader.to/ajax/progress.php?id=${encodeURIComponent(conv.id)}`));
+            const prog = (await progRes.json()) as { success?: number; download_url?: string; progress?: number };
+            if (prog?.download_url) { dl = prog.download_url; break; }
+            if (prog?.success === 0 && (prog.progress ?? 0) >= 120) break;
+          }
+          if (!dl) continue;
+          const url = rel(dl);
+          if (await audioValid(url)) {
+            const full: { url: string; art: string; name: string } = { url, art: `https://i.ytimg.com/vi/${vid}/maxresdefault.jpg`, name: songName };
+            try { sessionStorage.setItem(cacheKey, JSON.stringify({ ...full, t: Date.now() })); } catch { /* storage full */ }
+            return full;
+          }
+        } catch { /* one bad token; retry fresh */ }
+      }
+    } catch { /* youtube extractor down */ }
+    return null;
+  }
+
+  async function resolveFull(track: CinefyTrack) {
+    if (!track || track.fullUrl) return;
+    const artist = (track.artistName ?? "").trim();
+    const title = (track.trackName ?? "").trim();
+    if (!artist || !title) return;
+    let fullUrl: string | undefined;
+    let art: string | undefined;
+    let found: string | undefined;
+    try {
+      const apiRes = await fetch(`/api/song?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}`, { headers: { Accept: "application/json" } });
+      if (apiRes.ok) {
+        const json = await apiRes.json() as { url?: string; art?: string };
+        if (json.url) { fullUrl = json.url; art = json.art; found = "server"; }
+      }
+    } catch { /* server API not deployed yet */ }
+    if (!fullUrl) {
+      const mirror = await archiveMirror(artist, title);
+      if (mirror?.url) { fullUrl = mirror.url; art = mirror.art; found = mirror.name || "open library"; }
+    }
+    if (!fullUrl) {
+      const yt = await ytExtract(artist, title);
+      if (yt?.url) { fullUrl = yt.url; art = yt.art; found = `YouTube · ${yt.name}`; }
+    }
+    if (fullUrl) {
+      const patched: CinefyTrack = { ...track, fullUrl, artworkUrl100: art || track.artworkUrl100 || "", primaryGenreName: "Full Length" };
+      cacheTracks([patched]);
+      setSelected((prev) => (prev && prev.trackId === track.trackId ? { ...prev, fullUrl, artworkUrl100: art || prev.artworkUrl100 || "", primaryGenreName: "Full Length" } : prev));
+      const a = audioRef.current;
+      if (a && a.dataset.trackId === String(track.trackId)) {
+        a.dataset.trackId = "";
+        a.src = fullUrl;
+        a.currentTime = 0;
+        setProgress(0);
+        setDuration(0);
+        a.load();
+        setPlaying(true);
+        void a.play().catch(() => setPlaying(false));
+      }
+      flashFull(found ? `Full version unlocked — ${found}` : "Full version unlocked");
+    } else {
+      flashFull("No full version found right now — playing the 30s preview");
+    }
+  }
+
   useEffect(() => {
     if (addMenuFor === null) return;
     const handler = (event: MouseEvent) => {
@@ -3491,7 +6721,7 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
     audio.volume = volume;
     if (selected && audio.dataset.trackId !== String(selected.trackId)) {
       audio.dataset.trackId = String(selected.trackId);
-      audio.src = selected.previewUrl || "";
+      audio.src = selected.fullUrl || selected.previewUrl || "";
       audio.currentTime = 0;
       setProgress(0);
       setDuration(0);
@@ -3591,6 +6821,48 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
     return () => cancelAnimationFrame(frame);
   }, [playing]);
 
+  const musicSelRef = useRef(selected);
+  const musicPlayRef = useRef(playing);
+  musicSelRef.current = selected;
+  musicPlayRef.current = playing;
+
+  useEffect(() => {
+    if (!selected) {
+      if (musicSessionRef.current) {
+        if (getMediaSession() === musicSessionRef.current) setMediaSession(null);
+        musicSessionRef.current = null;
+      }
+      return;
+    }
+    if (!musicSessionRef.current) {
+      const session: MediaSession = {
+        source: "music",
+        get title() { return musicSelRef.current?.trackName ?? ""; },
+        get artist() { return musicSelRef.current?.artistName ?? ""; },
+        get artwork() { return musicSelRef.current?.artworkUrl100 || ""; },
+        get playing() { return musicPlayRef.current; },
+        get progress() { return audioRef.current?.currentTime ?? 0; },
+        get duration() { return audioRef.current?.duration ?? 0; },
+        onToggle: () => setPlaying((prev) => !prev),
+        onSeek: (time: number) => {
+          const audio = audioRef.current;
+          if (audio) { audio.currentTime = time; setProgress(time); }
+        },
+        onClose: () => { setPlaying(false); setSelected(null); onTrackChange(null); },
+      };
+      musicSessionRef.current = session;
+      setMediaSession(session);
+    } else {
+      notifyMediaSession();
+    }
+  }, [selected, playing]);
+
+  useEffect(() => () => {
+    const session = musicSessionRef.current;
+    if (session && getMediaSession() === session) setMediaSession(null);
+    musicSessionRef.current = null;
+  }, []);
+
   function previewLyrics(artist: string, title: string): string[] {
     const words = title.replace(/[^a-zA-Z0-9 ]/g, "").trim().split(/\s+/).filter(Boolean).slice(0, 4).join(" ");
     const theme = words || "this one";
@@ -3662,14 +6934,39 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
     setTab("nowplaying");
     onTrackChange({ name: track.trackName, artist: track.artistName, artwork: track.artworkUrl100 });
     showNotification(track);
+    if (!track.fullUrl) void resolveFull(track);
   }
 
   function stepTrack(direction: 1 | -1) {
-    const list = tab === "liked" ? getLikedTracks() : tab === "playlist" ? getPlaylistTracks() : tracks.length ? tracks : homeTracks;
+    let list: CinefyTrack[] = [];
+    if (tab === "liked") list = getLikedTracks();
+    else if (tab === "playlist") list = getPlaylistTracks();
+    else if (tab === "home") list = selected?.fullUrl ? FULL_LIBRARY : (tracks.length ? tracks : homeTracks);
+    else list = tracks.length ? tracks : homeTracks;
     if (!list.length || !selected) return;
+    if (shuffle && list.length > 1) {
+      const idx = list.findIndex((t) => t.trackId === selected.trackId);
+      let next = Math.floor(Math.random() * list.length);
+      if (next === idx) next = (next + 1) % list.length;
+      selectTrack(list[next]);
+      return;
+    }
     const idx = list.findIndex((t) => t.trackId === selected.trackId);
     const next = (idx + direction + list.length) % list.length;
     selectTrack(list[next]);
+  }
+
+  function handleEnded() {
+    const audio = audioRef.current;
+    if (repeat) {
+      if (audio) {
+        audio.currentTime = 0;
+        setProgress(0);
+        void audio.play().catch(() => setPlaying(false));
+      }
+      return;
+    }
+    stepTrack(1);
   }
 
   function toggleFavorite(track: CinefyTrack) {
@@ -3726,13 +7023,15 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   }
 
   function formatSeconds(value: number) {
-    return `0:${String(Math.max(0, Math.floor(value))).padStart(2, "0")}`;
+    const total = Math.max(0, Math.floor(value));
+    if (!Number.isFinite(total)) return "0:00";
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
   }
 
   function TrackRow({ track, index, showRemove }: { track: CinefyTrack; index: number; showRemove?: { playlistId: number } }) {
     const isActive = selected?.trackId === track.trackId;
     return <div className={`cinefy-track ${isActive ? "active" : ""}`}>
-      <button className="cinefy-track-main" onClick={() => selectTrack(track)}><img src={track.artworkUrl100} alt="" /><span className="cinefy-track-index">{isActive && playing ? "▶" : String(index + 1).padStart(2, "0")}</span><span className="cinefy-track-copy"><strong>{track.trackName}</strong><small>{track.artistName}</small></span></button>
+      <button className="cinefy-track-main" onClick={() => selectTrack(track)}><TrackArt track={track} size={40} /><span className="cinefy-track-index">{isActive && playing ? <EqBars playing /> : String(index + 1).padStart(2, "0")}</span><span className="cinefy-track-copy"><span className="cinefy-track-titleline"><strong>{track.trackName}</strong><span className={`cinefy-tag ${track.fullUrl ? "full" : "preview"}`}>{track.fullUrl ? "FULL" : "30s"}</span></span><small>{track.artistName}</small></span></button>
       <span className="cinefy-genre">{track.primaryGenreName || ""}</span>
       <span className="cinefy-track-actions">
         {showRemove ? <button className="cinefy-favorite" onClick={() => removeFromPlaylist(showRemove!.playlistId, track.trackId)} aria-label={t("sp.removeFromPlaylist")}>✕</button> : <>
@@ -3762,7 +7061,17 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
         <div className="cinefy-splash-line" key={splashLine}>{SPLASH_LINES[splashLine % SPLASH_LINES.length]}</div>
       </div>
     </div>}
-    <audio ref={audioRef} onTimeUpdate={(event) => setProgress(event.currentTarget.currentTime)} onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 30)} onEnded={() => stepTrack(1)} />
+    <audio ref={audioRef} onTimeUpdate={(event) => setProgress(event.currentTarget.currentTime)} onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || (selected?.fullUrl ? 0 : 30))} onEnded={handleEnded} onError={() => {
+    const a = audioRef.current;
+    if (a && selected && selected.fullUrl && (a.src || "").includes(selected.fullUrl)) {
+      const stale = selected;
+      try { sessionStorage.removeItem(`cinefy-full:${(stale.artistName + "|" + stale.trackName).toLowerCase()}`); } catch { /* ignore */ }
+      a.dataset.trackId = "";
+      setSelected((prev) => (prev && prev.fullUrl ? { ...prev, fullUrl: undefined } : prev));
+      flashFull("Full stream hiccuped — retrying…");
+      window.setTimeout(() => { void resolveFull({ ...stale, fullUrl: undefined }); }, 500);
+    }
+  }} />
     {hazyActive && <HazyLayer config={hazy} />}
     {starryActive && <div className="cinefy-theme-starry" data-testid="starry-layer" aria-hidden="true">
       {starField.map((s, i) => <span key={i} className={`starry-star twinkle${s.twinkle}`} style={{ left: `${s.left}%`, top: `${s.top}%`, width: s.size, height: s.size, opacity: s.opacity, animationDelay: `${s.delay}s` }} />)}
@@ -3818,13 +7127,38 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
 
         <div className="cinefy-content">
           {tab === "home" && <section>
+            <div className="cinefy-hero">
+              <div className="cinefy-hero-copy">
+                <span className="cinefy-hero-kicker"><EqBars playing={Boolean(playing && selected?.fullUrl)} small /> FULL LENGTH · UNLIMITED</span>
+                <h2>{t("sp.goodEvening")}</h2>
+                <p>No 30-second cuts. Every track in the Full Length library plays start to finish — songs, not samples.</p>
+              </div>
+              <button className="cinefy-hero-play" onClick={() => { const first = selected?.fullUrl ? selected : FULL_LIBRARY[0]; selectTrack(first); }} aria-label="Play full length library"><Play size={26} fill="currentColor" /></button>
+            </div>
+
+            <div className="cinefy-section-heading"><h3>Full Length Library</h3><span>{tp("sp.songsCount", FULL_LIBRARY.length)}</span></div>
+            <div className="cinefy-shelf">
+              {FULL_LIBRARY.map((track) => {
+                const isActive = selected?.trackId === track.trackId;
+                return <button key={track.trackId} className={`cinefy-shelf-card ${isActive ? "on" : ""}`} onClick={() => selectTrack(track)}>
+                  <span className="cinefy-shelf-art"><TrackArt track={track} /><span className="cinefy-shelf-play">{playing && isActive ? <EqBars playing /> : <Play size={20} fill="currentColor" />}</span><span className="cinefy-tag full">FULL</span></span>
+                  <strong>{track.trackName}</strong>
+                  <small>{track.artistName}</small>
+                </button>;
+              })}
+            </div>
+
             <div className="cinefy-section-heading"><h3>{t("sp.topHits")}</h3></div>
             {homeTracks.length ? <TrackList list={homeTracks} /> : <div className="cinefy-empty">{t("sp.loading")}</div>}
           </section>}
 
           {tab === "search" && <section>
+            <div className="cinefy-search-modes">
+              <button type="button" className={`cinefy-search-mode ${!fullMode ? "on" : ""}`} onClick={() => { setFullMode(false); if (searchQuery) void searchTracks(searchQuery); }}>Preview · 30s</button>
+              <button type="button" className={`cinefy-search-mode ${fullMode ? "on" : ""}`} onClick={() => { setFullMode(true); if (searchQuery) void searchFull(searchQuery); }}>Full songs · open library</button>
+            </div>
             {!searchQuery && <div className="cinefy-search-categories">
-              {["Lo-fi", "Hip Hop", "Pop", "Rock", "R&B", "Jazz", "Classical", "Electronic", "Anime", "K-Pop"].map((genre) => <button key={genre} className="cinefy-genre-card" onClick={() => { setSearchQuery(genre); void searchTracks(genre); }}>{genre}</button>)}
+              {["Lo-fi", "Hip Hop", "Pop", "Rock", "R&B", "Jazz", "Classical", "Electronic", "Anime", "K-Pop"].map((genre) => <button key={genre} className="cinefy-genre-card" onClick={() => { setSearchQuery(genre); runSearch(genre); }}>{genre}</button>)}
             </div>}
             {searchQuery && <>
               <div className="cinefy-section-heading"><h3>{tf("sp.results", { q: searchQuery })}</h3><span>{tp("sp.songsCount", tracks.length)}</span></div>
@@ -3929,21 +7263,25 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
               </div>
             </div>
           </section>}
-        {tab === "nowplaying" && <section>
+        {tab === "nowplaying" && <section className="cinefy-now-area">
+            {selected && <div className="cinefy-now-bg" style={selected.artworkUrl100 ? { backgroundImage: `url(${selected.artworkUrl100.replace("100x100", "600x600")})` } : { background: selected.color || "linear-gradient(135deg, #1db954, #0b84ff)" }} />}
             {selected ? <div className="cinefy-nowplaying">
               <div className="cinefy-nowplaying-top">
                 {!blyActive && lyrics.length > 0 && <span className={`cinefy-lyrics-sync ${lyricsSynced ? "synced" : "estimate"}`}>{lyricsSynced ? t("sp.lyricsSynced") : t("sp.lyricsEstimate")}</span>}
                 <button className="cinefy-nowplaying-exit" onClick={() => setTab("home")} aria-label={t("appMenu.back")}><ArrowLeft size={16} /> {t("appMenu.back")}</button>
               </div>
-              <div className="cinefy-nowplaying-art"><img src={selected.artworkUrl100.replace("100x100", "600x600")} alt="" /></div>
+              <div className={`cinefy-nowplaying-art ${playing ? "spin" : ""}`}><TrackArt track={selected} /></div>
               <div className="cinefy-nowplaying-info">
+                <div className="cinefy-nowplaying-tags"><span className={`cinefy-tag ${selected.fullUrl ? "full" : "preview"}`}>{selected.fullUrl ? "FULL LENGTH" : "30s PREVIEW"}</span>{playing && <EqBars playing />}</div>
                 <h3>{selected.trackName}</h3>
-                <span>{selected.artistName}</span>
+                <span className="cinefy-nowplaying-artist">{selected.artistName} · {selected.collectionName || selected.primaryGenreName}</span>
                 <div className={`cinefy-nowplaying-progress ${sonicActive ? "sonic-dance" : ""}`}><span>{formatSeconds(progress)}</span><input type="range" min="0" max={duration || 30} step="0.1" value={Math.min(progress, duration || 30)} onChange={(e) => { const v = Number(e.target.value); setProgress(v); if (audioRef.current) audioRef.current.currentTime = v; }} aria-label={t("sp.progress")} /><span>{formatSeconds(duration)}</span></div>
                 <div className="cinefy-nowplaying-controls">
-                  <button onClick={() => stepTrack(-1)} aria-label={t("sp.prevSong")}><ArrowLeft size={20} /></button>
-                  <button className="cinefy-nowplaying-play" onClick={() => setPlaying((v) => !v)} aria-label={playing ? t("sp.pause") : t("sp.play")}>{playing ? "⏸" : "▶"}</button>
-                  <button onClick={() => stepTrack(1)} aria-label={t("sp.nextSong")}><ArrowRight size={20} /></button>
+                  <button className={`cinefy-aux ${shuffle ? "on" : ""}`} onClick={() => setShuffle((v) => !v)} aria-label="Shuffle"><Shuffle size={16} /></button>
+                  <button className="cinefy-sidebtn" onClick={() => stepTrack(-1)} aria-label={t("sp.prevSong")}><ArrowLeft size={22} /></button>
+                  <button className="cinefy-nowplaying-play" onClick={() => setPlaying((v) => !v)} aria-label={playing ? t("sp.pause") : t("sp.play")}>{playing ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}</button>
+                  <button className="cinefy-sidebtn" onClick={() => stepTrack(1)} aria-label={t("sp.nextSong")}><ArrowRight size={22} /></button>
+                  <button className={`cinefy-aux ${repeat ? "on" : ""}`} onClick={() => setRepeat((v) => !v)} aria-label="Repeat"><Repeat size={16} /></button>
                 </div>
               </div>
               {blyActive
@@ -3965,10 +7303,16 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
     </div>
 
     {tab !== "nowplaying" && <footer className={`cinefy-player ${sonicActive ? "sonic-dance" : ""}`}>
-      <button className="cinefy-player-track" onClick={() => selected && setTab("nowplaying")} aria-label={t("sp.nowPlaying")}>{selected && <><img src={selected.artworkUrl100} alt="" /><div><strong>{selected.trackName}</strong><span>{selected.artistName}</span></div></>}<ChevronUp size={13} className="cinefy-player-track-open" /></button>
-      <div className="cinefy-controls"><button onClick={() => stepTrack(-1)} aria-label={t("sp.prevSong")}><ArrowLeft size={16} /></button><button className="cinefy-play" onClick={() => selected && setPlaying((v) => !v)} aria-label={playing ? t("sp.pause") : t("sp.play")}>{playing ? "⏸" : "▶"}</button><button onClick={() => stepTrack(1)} aria-label={t("sp.nextSong")}><ArrowRight size={16} /></button></div>
+      <button className="cinefy-player-track" onClick={() => selected && setTab("nowplaying")} aria-label={t("sp.nowPlaying")}>{selected && <><TrackArt track={selected} size={40} /><div><strong>{selected.trackName}<span className={`cinefy-tag mini ${selected.fullUrl ? "full" : "preview"}`}>{selected.fullUrl ? "FULL" : "30s"}</span></strong><span>{selected.artistName}</span></div></>}{selected && playing && <EqBars playing small />}<ChevronUp size={13} className="cinefy-player-track-open" /></button>
+      <div className="cinefy-controls">
+        <button title="Shuffle" className={`cinefy-aux ${shuffle ? "on" : ""}`} onClick={() => setShuffle((v) => !v)} aria-label="Shuffle"><Shuffle size={15} /></button>
+        <button onClick={() => stepTrack(-1)} aria-label={t("sp.prevSong")}><ArrowLeft size={16} /></button>
+        <button className="cinefy-play" onClick={() => selected && setPlaying((v) => !v)} aria-label={playing ? t("sp.pause") : t("sp.play")}>{playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}</button>
+        <button onClick={() => stepTrack(1)} aria-label={t("sp.nextSong")}><ArrowRight size={16} /></button>
+        <button title="Repeat" className={`cinefy-aux ${repeat ? "on" : ""}`} onClick={() => setRepeat((v) => !v)} aria-label="Repeat"><Repeat size={15} /></button>
+      </div>
       <div className="cinefy-progress"><span>{formatSeconds(progress)}</span><input type="range" min="0" max={duration || 30} step="0.1" value={Math.min(progress, duration || 30)} onChange={(e) => { const v = Number(e.target.value); setProgress(v); if (audioRef.current) audioRef.current.currentTime = v; }} aria-label={t("sp.progress")} /><span>{formatSeconds(duration)}</span></div>
-      <label className="cinefy-volume">VOL <input type="range" min="0" max="1" step="0.01" value={volume} onChange={(e) => setVolume(Number(e.target.value))} aria-label={t("sp.volume")} /></label>
+      <label className="cinefy-volume"><Volume2 size={14} /><input type="range" min="0" max="1" step="0.01" value={volume} onChange={(e) => setVolume(Number(e.target.value))} aria-label={t("sp.volume")} /></label>
     </footer>}
 
     {notif && <div className="cinefy-notif" onClick={() => setNotif(null)}>
@@ -3976,6 +7320,8 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
       <div className="cinefy-notif-body"><img className="cinefy-notif-art" src={notif.track.artworkUrl100} alt="" /><div className="cinefy-notif-info"><strong>{notif.track.trackName}</strong><span>{notif.track.artistName}</span></div></div>
       <div className="cinefy-notif-controls"><button onClick={(e) => { e.stopPropagation(); setPlaying(false); }} aria-label={t("sp.pause")}>⏸</button><button onClick={(e) => { e.stopPropagation(); setPlaying(true); }} aria-label={t("sp.resume")}>▶</button></div>
     </div>}
+
+    {fullToast && <div className="cinefy-fulltoast" onClick={() => setFullToast(null)}><Check size={13} /> <span>{fullToast}</span></div>}
   </div>;
 }
 
