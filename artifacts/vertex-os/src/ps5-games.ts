@@ -6,6 +6,8 @@ export interface Ps5Game {
 }
 
 export const PS5_GAMES: readonly Ps5Game[] = [
+  {"id":"n1","name":"Five Nights at Epstein","cover":"https://cdn.jsdelivr.net/gh/bestsabplayerox/covers@main//38.png","play":"https://sealgodreal.github.io/nebulagames/2/index.html"},
+  {"id":"n2","name":"Geometry Dash (Nebula)","cover":"https://cdn.jsdelivr.net/gh/bestsabplayerox/covers@main//27.png","play":"https://sealgodreal.github.io/nebulagames/1/index.html"},
   {"id":"z0","name":"Bowmasters","cover":"https://cdn.jsdelivr.net/gh/bestsabplayerox/covers@main//0.png","play":"https://cdn.jsdelivr.net/gh/bestsabplayerox/html@master//0.html"},
   {"id":"z1","name":"OvO","cover":"https://cdn.jsdelivr.net/gh/bestsabplayerox/covers@main//1.png","play":"https://cdn.jsdelivr.net/gh/bestsabplayerox/html@master//1-fde.html"},
   {"id":"z2","name":"OvO 2","cover":"https://cdn.jsdelivr.net/gh/bestsabplayerox/covers@main//2.png","play":"https://cdn.jsdelivr.net/gh/bestsabplayerox/html@master//2e.html"},

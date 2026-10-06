@@ -13,7 +13,7 @@ import {
 
 import { Ps5EmulatorSurface } from "./components/ps5-emulator";
 import { VerAiSurface } from "./components/ver-ai";
-import { BrowserSurface } from "./components/browser-app";
+import { BrowserSurface, ProxyUrlFrame } from "./components/browser-app";
 import { VertexStudioWallpaper } from "./components/vertex-wallpaper";
 import { HalloweenDecor, HalloweenWallpaper } from "./components/halloween";
 import { MusicWidgetLayer, MusicWidgetManager } from "./components/music-widgets";
@@ -5480,7 +5480,7 @@ function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (k
     : <BrowserSurface lang={lang} />;
   if (id === "calculator") return <div className="window-surface calc-app-surface"><CalculatorSurface /></div>;
   if (id === "pizza") return <iframe className="browser-frame" src={adRedir ?? "https://pizzaedition.com/"} title="Pizza edition" allow="autoplay; clipboard-write; camera; microphone; fullscreen" />;
-  if (id === "roblox") return <iframe className="browser-frame" src={adRedir ?? "https://frogiesarcade.net/"} title="Roblox / frogies arcade" allow="autoplay; clipboard-write; camera; microphone; fullscreen" />;
+  if (id === "roblox") return <ProxyUrlFrame url={adRedir ?? "https://73.ip.nowgg.fun/apps/a/19900/b.html"} title="Roblox" />;
   if (id === "messages") return <div className="window-surface msgs-surface"><MessagesSurface /></div>;
   if (id === "verai") return <div className="window-surface verai-surface"><VerAiSurface /></div>;
   if (id === "vertube") return <div className="window-surface vertube-surface"><VerTubeSurface /></div>;

@@ -224,3 +224,61 @@ function ProxyBrowser({ initialUrl, home = false }: { initialUrl?: string; home?
 export function BrowserSurface(_props: { lang: Lang }) {
   return <ProxyBrowser home />;
 }
+
+/** Full-bleed proxied site with no chrome. Used when a page refuses to be
+ *  framed (X-Frame-Options / CSP) — the scramjet proxy loads it anyway. */
+export function ProxyUrlFrame({ url, title = "Proxied page" }: { url: string; title?: string }) {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [status, setStatus] = useState<"booting" | "ready">("booting");
+  const [error, setError] = useState<string | null>(null);
+  const urlRef = useRef(url);
+
+  useEffect(() => {
+    const el = iframeRef.current;
+    if (!el) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        if (!("serviceWorker" in navigator)) {
+          throw new Error("This browser does not support service workers, so the proxy cannot run.");
+        }
+        const runtime = await loadRuntime();
+        await ensureServiceWorker();
+        const ready = await navigator.serviceWorker.ready;
+        if (cancelled) return;
+        const wispUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${BASE}api/wisp/`;
+        const { default: LibcurlClient } = await import("@mercuryworkshop/libcurl-transport");
+        const transport = new LibcurlClient({ wisp: wispUrl });
+        const controller = new runtime.Controller({ serviceworker: ready.active, transport });
+        await controller.wait();
+        if (cancelled) return;
+        const frame = controller.createFrame(el, { plugins: [] });
+        frame.go(urlRef.current);
+        setStatus("ready");
+      } catch (cause) {
+        if (cancelled) return;
+        setError(cause instanceof Error ? cause.message : String(cause));
+        setStatus("ready");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="proxy-url-frame">
+      <iframe
+        ref={iframeRef}
+        className="browser-frame"
+        title={title}
+        allow="autoplay; clipboard-read; clipboard-write; camera; microphone; fullscreen; gamepad; cross-origin-isolated"
+        allowFullScreen
+      />
+      {status === "booting" ? <div className="browser-loading">Starting proxy…</div> : null}
+      {error ? <div className="browser-proxy-error">{error}</div> : null}
+    </div>
+  );
+}
