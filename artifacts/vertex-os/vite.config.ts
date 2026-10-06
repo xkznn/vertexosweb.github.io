@@ -73,8 +73,8 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH ?? '/vertexosweb.github.io/';
 
-export default defineConfig({
-  base: basePath,
+export default defineConfig(async ({ command, isPreview }) => ({
+  base: !isPreview && command === 'serve' ? '/' : basePath,
   plugins: [
     scramjetRuntimePlugin(),
     react(),
@@ -125,4 +125,4 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: true,
   },
-});
+}));

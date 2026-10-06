@@ -376,10 +376,10 @@ const MC_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAMAAABF0
 const RAINMETER_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAMAAABF0y+mAAAAVFBMVEVHcEwobJoma5oobZsjapkgapo6d6Mma5kcZ5d0m76mvtkma5rX4PTw8P9Th64japknbJqTsc++zuX19P/x6Orv39jou5DjoE/s1MPgjhzgkSnlrG/pPPZZAAAAEXRSTlMAOoEJ1f3/p+f//1r////AIySV8nYAAADzSURBVHgBYiAeMALqJI8kC2EYiBZBco4ic/97DmIS+Nu9fYpd3bfZMELXhD2gGFpDpdJgGkMFWOdDrEIjk3MZqjfF4K1zLsmuek12l6yv3BRHZR0rVW7qMRMzsj6UrVEqRkwTmkbjvXUsIKhfRpSgazSy8N0q/YMVrQY0TfP8S+3LJgFuXtZ12X62+vHxTfC07JfWZSai7fLwYf/I8DiOC5/LebwNDkgbQ8bHvpIa49N0O503ZbwRhMK8+Tx21rG4Ig89aDct53pfnDEUEcFk+dXZOe3HIipRgE/Z2qwVhu4jXiYAeo84mruvxNH0vYkPb74AqzITDrilOz4AAAAASUVORK5CYII=";
 const ARCH_ICON = asset("images/archlinux.png");
 
-const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; iconImg?: string; pinned?: boolean }[] = [
+const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; iconImg?: string; pinned?: boolean; squircle?: boolean }[] = [
   { id: "hub", title: "Vertex-Hub", subtitle: t("appSub.hub"), icon: Sparkles, iconImg: asset("images/velara.png"), pinned: true },
   { id: "spicetify", title: "Spicetify", subtitle: t("appSub.spicetify"), icon: Music2, iconImg: asset("images/spicetify.ico"), pinned: true },
-  { id: "wallpaper-engine", title: "Wallpaper Engine", subtitle: t("appSub.wallpaperEngine"), icon: Image, iconImg: asset("images/wallpaper-engine.gif"), pinned: true },
+  { id: "wallpaper-engine", title: "Wallpaper Engine", subtitle: t("appSub.wallpaperEngine"), icon: Image, iconImg: asset("images/wallpaper-engine.gif"), pinned: true, squircle: true },
   { id: "browser", title: "Browser", subtitle: t("appSub.browser"), icon: Compass, iconImg: asset("images/endis-rest.png"), pinned: true },
   { id: "pizza", title: "Pizza edition", subtitle: t("appSub.pizza"), icon: Compass, iconImg: asset("images/pizza.ico"), pinned: true },
   { id: "roblox", title: "Roblox", subtitle: t("appSub.roblox"), icon: Gamepad2, iconImg: asset("images/roblox.ico"), pinned: true },
@@ -387,14 +387,14 @@ const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; icon
   { id: "verai", title: "VER-AI", subtitle: t("appSub.verai"), icon: Sparkles, iconImg: asset("images/ver-ai.ico"), pinned: true },
   { id: "vertube", title: "VER-TUBE", subtitle: "watch any video, no account", icon: Play, iconImg: "https://www.youtube.com/s/desktop/af0a3c1e/img/favicon_144x144.png", pinned: true },
   { id: "settings", title: "Config", subtitle: t("appSub.settings"), icon: Settings2, iconImg: asset("images/config-icon.png"), pinned: true },
-  { id: "games", title: "PS5 Emu", subtitle: t("appSub.games"), icon: Gamepad2, iconImg: asset("images/ps5-emu.png") },
-  { id: "minecraft", title: "Minecraft Launcher", subtitle: t("appSub.minecraft"), icon: Gamepad2, iconImg: MC_ICON },
+  { id: "games", title: "PS5 Emu", subtitle: t("appSub.games"), icon: Gamepad2, iconImg: asset("images/ps5-emu.png"), squircle: true },
+  { id: "minecraft", title: "Minecraft Launcher", subtitle: t("appSub.minecraft"), icon: Gamepad2, iconImg: MC_ICON, squircle: true },
   { id: "translucenttb", title: "TranslucentTB", subtitle: t("appSub.translucenttb"), icon: Waves, iconImg: asset("images/translucenttb-logo.png") },
   { id: "calculator", title: "Calculator", subtitle: t("appSub.calculator"), icon: Calculator, iconImg: asset("images/calculator-logo.svg") },
   { id: "rainmeter", title: "Rainmeter", subtitle: t("appSub.rainmeter"), icon: MonitorCog, iconImg: RAINMETER_ICON },
-  { id: "terminal", title: "Terminal", subtitle: t("appSub.terminal"), icon: Terminal, iconImg: "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/51/Windows_Terminal_logo.svg/960px-Windows_Terminal_logo.svg.png", pinned: true },
+  { id: "terminal", title: "Terminal", subtitle: t("appSub.terminal"), icon: Terminal, iconImg: ARCH_ICON, pinned: true },
   { id: "links", title: "LazyList", subtitle: "the full proxy list", icon: Link2, iconImg: asset("images/links.svg"), pinned: true },
-  { id: "discord", title: "Discord", subtitle: t("appSub.discord"), icon: MessageCircle, iconImg: asset("images/discord-invite.png"), pinned: true },
+  { id: "discord", title: "Discord", subtitle: t("appSub.discord"), icon: MessageCircle, iconImg: asset("images/discord-icon.png"), pinned: true, squircle: true },
 ];
 
 type AppOverride = { name?: string; showName?: boolean; iconUrl?: string; pinned?: boolean };
@@ -997,9 +997,10 @@ function AvatarGlyph({ value, name, size = 34 }: { value?: string; name: string;
   return <span style={{ fontSize: Math.round(size * 0.44) }}>{name.slice(0, 1).toUpperCase()}</span>;
 }
 
-function AppIcon({ app, size = 21 }: { app: { icon: LucideIcon; iconImg?: string; iconUrl?: string }; size?: number }) {
-  if (app.iconUrl) return <img className="app-icon-img" src={app.iconUrl} alt="" style={{ width: size, height: size }} />;
-  if (app.iconImg) return <img className="app-icon-img" src={app.iconImg} alt="" style={{ width: size, height: size }} />;
+function AppIcon({ app, size = 21 }: { app: { icon: LucideIcon; iconImg?: string; iconUrl?: string; squircle?: boolean }; size?: number }) {
+  const img = (src: string) => <img className={`app-icon-img${app.squircle ? " icon-squircle" : ""}`} src={src} alt="" style={{ width: size, height: size }} />;
+  if (app.iconUrl) return img(app.iconUrl);
+  if (app.iconImg) return img(app.iconImg);
   const Icon = app.icon;
   return <Icon size={size} strokeWidth={1.55} />;
 }

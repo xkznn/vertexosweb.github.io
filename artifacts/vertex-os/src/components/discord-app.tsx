@@ -6,7 +6,7 @@ const asset = (path: string) => `${BASE}${path}`;
 export function DiscordApp() {
   return (
     <div className="dsc-app">
-      <img className="dsc-logo" src={asset("images/discord-invite.png")} alt="Vertex-OS" />
+      <img className="dsc-logo" src={asset("images/discord-icon.png")} alt="Discord" />
 
       <h1 className="dsc-title">
         YOU HAVE BEEN INVITED TO JOIN Vertex-OS 🎃

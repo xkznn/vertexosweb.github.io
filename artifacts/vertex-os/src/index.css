@@ -466,6 +466,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .task-preview-window .window-bar { animation: none; min-height: 42px; flex: 0 0 auto; }
 .task-preview-window .window-body { overflow: hidden; flex: 1; min-height: 0; }
 .app-icon-img { object-fit: contain; }
+.app-icon-img.icon-squircle { border-radius: 23%; }
 .window-controls { display: flex; gap: 8px; align-items: center; }
 .window-control { width: 34px; height: 34px; display: grid; place-items: center; background: rgba(255,255,255,.07); border: 1px solid var(--line); color: var(--muted); cursor: pointer; transition: background .15s ease, color .15s ease; }
 .window-control:hover { color: #fff; background: rgba(255,255,255,.16); }
