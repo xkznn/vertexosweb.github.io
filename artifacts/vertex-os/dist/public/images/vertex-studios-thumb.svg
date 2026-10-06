@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+  <defs>
+    <radialGradient id="vwsg" cx="50%" cy="-5%" r="75%">
+      <stop offset="0%" stop-color="#161616"/>
+      <stop offset="55%" stop-color="#070707"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </radialGradient>
+    <clipPath id="vwsclip"><circle cx="320" cy="168" r="86"/></clipPath>
+    <path id="vwsarc" d="M 220,168 A 100,100 0 0,1 420,168" fill="none"/>
+  </defs>
+  <rect width="640" height="360" fill="url(#vwsg)"/>
+  <g stroke="#ffffff" fill="none" opacity="0.85">
+    <g clip-path="url(#vwsclip)">
+      <ellipse cx="320" cy="168" rx="86" ry="86" stroke-opacity="0.9"/>
+      <ellipse cx="320" cy="168" rx="86" ry="34" stroke-opacity="0.8"/>
+      <ellipse cx="320" cy="168" rx="34" ry="86" stroke-opacity="0.8"/>
+      <ellipse cx="320" cy="168" rx="86" ry="52" stroke-opacity="0.6" transform="rotate(24 320 168)"/>
+      <ellipse cx="320" cy="168" rx="52" ry="86" stroke-opacity="0.6" transform="rotate(24 320 168)"/>
+    </g>
+    <circle cx="320" cy="168" r="100" stroke-opacity="0.4" stroke-width="1.2" stroke-dasharray="5 4"/>
+  </g>
+  <text font-family="'Paytone One','Space Grotesk',sans-serif" font-weight="900" font-size="22" fill="#ffffff" letter-spacing="3">
+    <textPath href="#vwsarc" startOffset="50%" text-anchor="middle">VERTEX STUDIOS</textPath>
+  </text>
+</svg>
