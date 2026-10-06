@@ -5416,3 +5416,64 @@ html[data-style="macos"] .desktop-widget { border-color:rgba(219,225,255,.23); b
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
 }
 .widget-movable-floating.is-dragging { z-index:120; }
+
+/* ============================================================
+   Discord invite app
+   ============================================================ */
+.dsc-app {
+  position: relative;
+  min-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  padding: clamp(22px, 5vw, 52px) clamp(16px, 4vw, 40px) 48px;
+  background:
+    radial-gradient(1000px 560px at 78% -10%, rgba(88,101,242,.28), transparent 62%),
+    radial-gradient(760px 480px at 10% 108%, rgba(233,30,99,.16), transparent 60%),
+    #0b0d16;
+  font-family: "gg sans", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Inter, sans-serif;
+  color: #f2f3f7;
+}
+.dsc-glow {
+  position: absolute;
+  inset: -40% -20% auto -20%;
+  height: 520px;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(88,101,242,.30), transparent 72%);
+  filter: blur(26px);
+}
+.dsc-card {
+  position: relative;
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: clamp(24px, 4vw, 38px);
+  text-align: center;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(28,31,45,.92), rgba(16,18,28,.94));
+  box-shadow: 0 28px 70px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.dsc-brand { display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); }
+.dsc-brand-mark { width: 30px; height: 30px; border-radius: 9px; object-fit: cover; }
+.dsc-brand-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
+.dsc-brand-text strong { font-size: 13px; letter-spacing: .04em; }
+.dsc-brand-text small { font-size: 10px; color: #a8adbd; text-transform: uppercase; letter-spacing: .16em; }
+.dsc-title { margin: 2px 0 0; font-size: clamp(21px, 3.4vw, 30px); line-height: 1.22; font-weight: 800; letter-spacing: -.01em; }
+.dsc-pumpkin { filter: drop-shadow(0 3px 10px rgba(255,140,0,.45)); }
+.dsc-copy { margin: 0; max-width: 44ch; font-size: 13.5px; line-height: 1.65; color: #b9bfd0; }
+.dsc-invite-art { width: min(340px, 100%); padding: 12px; border-radius: 18px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.dsc-invite-art img { display: block; width: 100%; height: auto; border-radius: 12px; }
+.dsc-qr { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 20px 14px; border-radius: 18px; background: linear-gradient(160deg, rgba(88,101,242,.20), rgba(233,30,99,.10)); border: 1px solid rgba(140,152,255,.28); box-shadow: 0 0 34px rgba(88,101,242,.28); }
+.dsc-qr-head { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .18em; color: #c3c9ff; }
+.dsc-qr-frame { display: block; padding: 12px; border-radius: 16px; background: #fff; box-shadow: 0 10px 26px rgba(0,0,0,.42); }
+.dsc-qr-frame img { display: block; width: clamp(148px, 34vw, 196px); height: auto; image-rendering: crisp-edges; }
+.dsc-qr-url { font-size: 12px; font-weight: 700; letter-spacing: .06em; color: #dfe3ff; }
+.dsc-accept { display: inline-flex; align-items: center; gap: 10px; width: min(340px, 100%); justify-content: center; padding: 14px 20px; border: 0; border-radius: 14px; cursor: pointer; font-size: 14px; font-weight: 700; letter-spacing: .01em; color: #fff; background: linear-gradient(135deg, #5865f2, #7b5cf0); box-shadow: 0 12px 28px rgba(88,101,242,.42); transition: transform .16s ease, box-shadow .16s ease, filter .16s ease; }
+.dsc-accept:hover { transform: translateY(-1px); filter: brightness(1.08); box-shadow: 0 16px 34px rgba(88,101,242,.55); }
+.dsc-accept:active { transform: translateY(0); }
+.dsc-accept.is-accepted { background: linear-gradient(135deg, #2f8f5b, #35a06a); box-shadow: 0 12px 28px rgba(53,160,106,.4); }
+.dsc-accept-arrow { opacity: .8; }
+.dsc-note { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #9aa1b5; }
