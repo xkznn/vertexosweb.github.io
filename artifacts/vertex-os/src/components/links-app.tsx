@@ -17,6 +17,7 @@ const DOMAINS: DomainItem[] = [
   { name: "Netlify", url: "https://vertex-os-site.netlify.app/", icon: asset("images/netlify.png"), shot: SHOT_OS, note: "global cdn" },
   { name: "Vercel", url: "https://vertex-os-ebon.vercel.app/", icon: asset("images/vercel.png"), shot: SHOT_OS, note: "edge deploy" },
   { name: "GitHub Pages", url: "https://xkznn.github.io/vertexosweb.github.io/", icon: asset("images/github.svg"), shot: SHOT_OS, note: "static mirror", tint: true },
+  { name: "B-CDN", url: "https://s3westamazonaws.b-cdn.net/", icon: asset("images/v-cloud-logo.png"), shot: SHOT_OS, note: "fast mirror" },
   { name: "Link Finder", url: "https://link-finder.netlify.app/", icon: asset("images/links.svg"), shot: SHOT_FINDER, note: "our other tool" },
 ];
 
@@ -349,7 +350,7 @@ function FeaturedSection({ compact }: { compact: boolean }) {
       <SectionHead
         kicker="Start here"
         title="Featured"
-        blurb="All four of our addresses — every one of them runs the same Vertex OS, so if a host is blocked just open the next."
+        blurb="All five of our addresses — every one of them runs the same Vertex OS, so if a host is blocked just open the next."
         right={(
           <div className="lnk-row-nav">
             <button onClick={() => document.querySelector(".lnk-dnav--prev")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))} aria-label="Scroll featured left"><ChevronLeft size={16} /></button>
@@ -382,30 +383,16 @@ function ProxyCard({ item }: { item: ProxyItem }) {
   );
 }
 
-/** All 34 proxies as one PlayStation-style game row: scroll sideways or arrow it. */
+/** All proxies as one library grid — every card opens with the open method picked above. */
 function ProxyRow({ items }: { items: ProxyItem[] }) {
-  const track = useRef<HTMLDivElement | null>(null);
-
-  const nudge = (dir: number) => {
-    const el = track.current;
-    if (!el) return;
-    el.scrollBy({ left: dir * Math.max(260, el.clientWidth * 0.8), behavior: "smooth" });
-  };
-
   return (
-    <section className="lnk-sect lnk-prow-sect" aria-label="Proxy library">
+    <section className="lnk-sect" aria-label="Proxy library">
       <SectionHead
         kicker="LazyList library"
         title="Proxy library"
-        blurb={`${items.length} proxies from the LazyList page — scroll sideways or use the arrows`}
-        right={(
-          <div className="lnk-row-nav">
-            <button onClick={() => nudge(-1)} aria-label="Scroll library left"><ChevronLeft size={16} /></button>
-            <button onClick={() => nudge(1)} aria-label="Scroll library right"><ChevronRight size={16} /></button>
-          </div>
-        )}
+        blurb={`${items.length} proxies from the LazyList page — pick an open method up top, then tap any card`}
       />
-      <div className="lnk-prow" ref={track}>
+      <div className="lnk-pgrid">
         {items.map((item) => <ProxyCard key={item.id} item={item} />)}
       </div>
     </section>

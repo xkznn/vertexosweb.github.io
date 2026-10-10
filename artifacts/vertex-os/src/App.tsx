@@ -43,8 +43,8 @@ type WindowState = { id: AppId; minimized: boolean; maximized: boolean; rect: Wi
 type Wallpaper = { id: WallpaperId; name: string; meta: string; video?: string; image?: string; videoLow?: string };
 type ColorMode = "dark" | "light";
 type SystemStyle = "vertex" | "macos";
-type SystemSettings = { optimized: boolean; fastBoot: boolean; idleLock: boolean; confirm: boolean; cloak: string; cloakName: string; cloakIcon: string; panicKey: string; panicUrl: string; adblock: boolean; adblockUrl: string; deviceName: string; colorMode: ColorMode; systemStyle: SystemStyle };
-const defaultSettings: SystemSettings = { optimized: false, fastBoot: false, idleLock: false, confirm: false, cloak: "none", cloakName: "Vertex-OS", cloakIcon: "", panicKey: "`", panicUrl: "", adblock: false, adblockUrl: "", deviceName: "VERTEX-PC", colorMode: "dark", systemStyle: "vertex" };
+type SystemSettings = { optimized: boolean; fastBoot: boolean; idleLock: boolean; confirm: boolean; cloak: string; cloakName: string; cloakIcon: string; panicKey: string; panicUrl: string; adblock: boolean; adblockUrl: string; deviceName: string; colorMode: ColorMode; systemStyle: SystemStyle; fontStyle: string };
+const defaultSettings: SystemSettings = { optimized: false, fastBoot: false, idleLock: false, confirm: false, cloak: "none", cloakName: "Vertex-OS", cloakIcon: "", panicKey: "`", panicUrl: "", adblock: false, adblockUrl: "", deviceName: "VERTEX-PC", colorMode: "dark", systemStyle: "vertex", fontStyle: "vertex" };
 const PASSWORD_KEY = "vertex-password";
 const PROFILE_KEY = "vertex-profile";
 const ACCOUNTS_KEY = "vertex-accounts";
@@ -204,7 +204,7 @@ const nativeVideoQualified = !PERF.low && screenHighRes;
 const bgSrc = (nativeV?: string, lowV?: string) => (!nativeV ? undefined : lowV && !nativeVideoQualified ? lowV : nativeV);
 const pvSrc = (nativeV?: string, lowV?: string) => (!nativeV ? undefined : lowV ?? nativeV);
 
-const BOOT_INTRO_SRC = asset("boot-intro.mp4");
+const BOOT_INTRO_SRC = "https://cineosweb.github.io/Videos/Boot.mp4";
 
 const CLOAKS: Record<string, { title: string; icon: string }> = {
   none: { title: "Vertex-OS", icon: asset(HALLOWEEN_ACTIVE ? "vertex-hub-logo-halloween.png" : "vertex-hub-logo.png") },
@@ -1440,7 +1440,8 @@ onSessionClose: (peerCode) => {
     root.dataset.theme = settings.colorMode === "light" ? "light" : "dark";
     root.dataset.season = HALLOWEEN_ACTIVE ? "halloween" : "";
     root.dataset.style = settings.systemStyle === "macos" ? "macos" : "";
-  }, [settings.colorMode, settings.systemStyle]);
+    root.dataset.font = settings.fontStyle || "vertex";
+  }, [settings.colorMode, settings.systemStyle, settings.fontStyle]);
   const [updateOpen, setUpdateOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [toasts, setToasts] = useState<{ id: number; title: string; copy: string; href?: string }[]>([]);
@@ -1900,7 +1901,7 @@ onSessionClose: (peerCode) => {
 
   function toggleMaximize(id: AppId) {
     setWindows((items) => items.map((item) => {
-      if (item.id !== id || id === "spicetify") return item;
+      if (item.id !== id) return item;
       if (item.maximized) {
         return { ...item, maximized: false, rect: item.prevRect ?? item.rect };
       }
@@ -2733,7 +2734,7 @@ function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, onMa
   const dragRef = useRef<{ id: AppId; dx: number; dy: number } | null>(null);
 
   const startDrag = (event: ReactPointerEvent<HTMLElement>, win: WindowState) => {
-    if (win.maximized || win.id === "spicetify") return;
+    if (win.maximized) return;
     if (event.button !== 0) return;
     if ((event.target as HTMLElement).closest("button")) return;
     onFocus(win.id);
@@ -2766,10 +2767,9 @@ function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, onMa
       activeWindow === win.id ? "active" : "",
       win.closingAt ? "closing" : "",
       win.minimized ? "minimized" : "",
-      win.id === "spicetify" ? "cinefy-fullscreen" : "",
-      win.maximized && win.id !== "spicetify" ? "maximized" : "",
+      win.maximized ? "maximized" : "",
     ].filter(Boolean).join(" ");
-    const rectStyle = win.id === "spicetify" || win.maximized ? {} : { left: win.rect.x, top: win.rect.y, width: win.rect.w, height: win.rect.h };
+    const rectStyle = win.maximized ? {} : { left: win.rect.x, top: win.rect.y, width: win.rect.w, height: win.rect.h };
     const mac = settings.systemStyle === "macos";
     return <article key={win.id} className={classNames} onMouseDown={() => onFocus(win.id)} style={{ ...rectStyle, zIndex: activeWindow === win.id ? 40 : 30 }}>
       <header className="window-bar" onPointerDown={(event) => startDrag(event, win)} onDoubleClick={() => onMaximize(win.id)}>
@@ -5896,6 +5896,7 @@ const SETTINGS_SEARCH: { tab: SettingsTabId; label: string; hint: string }[] = [
   { tab: "account", label: "Password", hint: "Lock screen password" },
   { tab: "system", label: "Performance", hint: "Optimization, fast boot, idle lock" },
   { tab: "system", label: "System style", hint: "Switch between Vertex-OS and macOS looks" },
+  { tab: "system", label: "Text style", hint: "Change the font used across Vertex-OS" },
   { tab: "colors", label: "Color mode", hint: "Bright or black theme" },
   { tab: "language", label: "Language & region", hint: "Idiom and formatting" },
   { tab: "privacy", label: "Cloak", hint: "Disguise the browser tab" },
@@ -5903,6 +5904,21 @@ const SETTINGS_SEARCH: { tab: SettingsTabId; label: string; hint: string }[] = [
   { tab: "privacy", label: "Panic key", hint: "Instantly hide Vertex-OS" },
   { tab: "about", label: "About Vertex-OS", hint: "Version and FAQ" },
   { tab: "about", label: "FAQ", hint: "Common questions" },
+];
+
+const FONT_STYLES: { id: string; label: string; note: string; family: string }[] = [
+  { id: "vertex", label: "Vertex", note: "Orbitron · Space Grotesk", family: '"Orbitron", "Space Grotesk", sans-serif' },
+  { id: "minecraft", label: "Minecraft", note: "Blocky pixel", family: '"Minecraftia", "Courier New", monospace' },
+  { id: "aquatico", label: "Aquatico", note: "Rounded techy", family: '"Aquatico", sans-serif' },
+  { id: "anurati", label: "Anurati", note: "Wide caps display", family: '"Anurati", sans-serif' },
+  { id: "quicksand", label: "Quicksand", note: "Soft geometric", family: '"Quicksand", sans-serif' },
+  { id: "hero", label: "Hero", note: "Bold poster", family: '"Hero Bold", "Hero Light", sans-serif' },
+  { id: "electroharmonix", label: "Electroharmonix", note: "Retro electro", family: '"electroharmonix", sans-serif' },
+  { id: "chicago", label: "Chicago", note: "Classic Mac", family: '"Chicago", "Courier New", monospace' },
+  { id: "nexa", label: "Nexa", note: "Modern sans", family: '"Nexa", sans-serif' },
+  { id: "jetbrains", label: "JetBrains Mono", note: "Coding mono", family: '"JetBrains Mono", monospace' },
+  { id: "sfpro", label: "SF Pro", note: "Apple system", family: '"SF Pro Display", -apple-system, sans-serif' },
+  { id: "tuesday", label: "Tuesday Night", note: "Handwritten", family: '"Tuesday Night", cursive' },
 ];
 
 function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic, avatar, accountName, accountEmail, onAvatarChange, onAccountChange, appliedWallpaper, appliedLockWallpaper, onApplyWallpaper, onNotify }: {
@@ -6142,6 +6158,18 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, o
             </div>
           </section>
           <section className="win-settings-card">
+            <div className="setting-group"><Palette size={13} /> Text style</div>
+            <p className="win-settings-note">Change the font Vertex-OS uses everywhere. Pick the look you like best.</p>
+            <div className="win-settings-fontgrid">
+              {FONT_STYLES.map((font) => (
+                <button key={font.id} type="button" className={`win-settings-font ${settings.fontStyle === font.id ? "active" : ""}`} onClick={() => updateSetting("fontStyle", font.id)}>
+                  <span className="win-settings-font-sample" style={{ fontFamily: font.family }}>Aa</span>
+                  <span className="win-settings-font-meta"><strong>{font.label}</strong><small>{font.note}</small></span>
+                </button>
+              ))}
+            </div>
+          </section>
+          <section className="win-settings-card">
             <div className="setting-group"><Cpu size={13} /> {t("set.groupPerf")}</div>
             <SettingToggle label={t("set.optLabel")} help={t("set.optHelp")} value={settings.optimized} onChange={(value) => updateSetting("optimized", value)} />
             <SettingToggle label={t("set.fastBootLabel")} help={t("set.fastBootHelp")} value={settings.fastBoot} onChange={(value) => updateSetting("fastBoot", value)} />
@@ -6252,6 +6280,26 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, o
   );
 }
 
+const TUNG_API = "https://kidsprepnest.org";
+type TungTrack = { id?: string; title?: string; artist?: string; artwork?: string; duration?: number; src?: string };
+function ttHash(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function mapTungTracks(tracks: TungTrack[] | undefined): CinefyTrack[] {
+  return (tracks ?? []).filter((t): t is TungTrack & { id: string; title: string; artist: string; artwork: string } => Boolean(t.id && t.title && t.artist && t.artwork)).map((t) => ({
+    trackId: -(100000 + (ttHash(String(t.id)) % 1000000)),
+    trackName: String(t.title),
+    artistName: String(t.artist),
+    collectionName: "Tung Tung · Full Songs",
+    artworkUrl100: String(t.artwork),
+    previewUrl: "",
+    trackViewUrl: "",
+    primaryGenreName: "Full Length",
+    fullUrl: t.src ? (t.src.startsWith("http") ? t.src : `${TUNG_API}${t.src}`) : `${TUNG_API}/api/music/stream?id=${encodeURIComponent(String(t.id))}`,
+  }));
+}
 function TrackArt({ track, size }: { track: CinefyTrack; size?: number }) {
   const style = size ? { width: size, height: size } : undefined;
   if (track.artworkUrl100 && track.artworkUrl100.startsWith("http")) {
@@ -6282,7 +6330,7 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   const [volume, setVolume] = useState(0.82);
   const [favorites, setFavorites] = useState<number[]>(() => storage.read("cinefy-favorites", []));
   const [trackCache, setTrackCache] = useState<TrackCache>(() => storage.read("cinefy-track-cache", {}));
-  const [fullMode, setFullMode] = useState(true);
+  const [searchSource, setSearchSource] = useState<"tt" | "itunes" | "archive">("tt");
   const [repeat, setRepeat] = useState(false);
   const [shuffle, setShuffle] = useState(false);
   const [fullToast, setFullToast] = useState<string | null>(null);
@@ -6311,7 +6359,11 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   const [splashPhase, setSplashPhase] = useState<"reveal" | "loading" | "done">("reveal");
   const [splashProgress, setSplashProgress] = useState(0);
   const [splashLine, setSplashLine] = useState(0);
-  const splashLoadMs = useRef(5500 + Math.random() * 3500);
+  const splashLoadMs = useRef(2000 + Math.random() * 900);
+  const onTrackChangeRef = useRef(onTrackChange);
+  onTrackChangeRef.current = onTrackChange;
+  useEffect(() => () => { onTrackChangeRef.current(null); }, []);
+  function skipSplash() { setSplash(false); }
   const starField = useMemo(() => {
     const area = typeof window !== "undefined" ? window.innerWidth * window.innerHeight : 1400 * 860;
     const count = Math.max(120, Math.min(320, Math.round(area / 4000)));
@@ -6419,6 +6471,14 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   useEffect(() => {
     async function loadHome() {
       try {
+        const ttRes = await fetch(`${TUNG_API}/api/music/search?q=${encodeURIComponent("top hits")}`);
+        if (ttRes.ok) {
+          const tt = await ttRes.json() as { tracks?: unknown };
+          const list = mapTungTracks(tt.tracks as TungTrack[] | undefined);
+          if (list.length) { setHomeTracks(list); cacheTracks(list); return; }
+        }
+      } catch { /* fall back to iTunes */ }
+      try {
         const params = new URLSearchParams({ term: "top hits 2025", media: "music", entity: "song", limit: "20" });
         const response = await fetch(`https://itunes.apple.com/search?${params.toString()}`);
         const data = await response.json() as { results?: Partial<CinefyTrack>[] };
@@ -6494,8 +6554,29 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
     }
   }
 
+  async function searchTung(term: string) {
+    const cleanTerm = term.trim();
+    if (!cleanTerm) return;
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${TUNG_API}/api/music/search?q=${encodeURIComponent(cleanTerm)}`);
+      if (!response.ok) throw new Error("Music search unavailable");
+      const data = await response.json() as { tracks?: unknown };
+      const out = mapTungTracks(data.tracks as TungTrack[] | undefined);
+      setTracks(out);
+      cacheTracks(out);
+      if (!out.length) setError(t("sp.noResults"));
+    } catch {
+      setError(t("sp.relayError"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function runSearch(term: string) {
-    if (fullMode) void searchFull(term);
+    if (searchSource === "tt") void searchTung(term);
+    else if (searchSource === "archive") void searchFull(term);
     else void searchTracks(term);
   }
 
@@ -7036,12 +7117,13 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   }
 
   return <div className={`cinefy-surface cinefy-app ${hazyActive ? "hazy-app" : ""} ${starryActive ? "starry-night" : ""}`}>
-    {splash && <div className={`cinefy-splash ${splashPhase}`} data-testid="cinefy-splash" aria-label="Spicetify loading">
+    {splash && <div className={`cinefy-splash ${splashPhase}`} data-testid="cinefy-splash" aria-label="Spicetify loading" onClick={skipSplash}>
       <img className="cinefy-splash-logo" src={asset("images/spicetify-splash.png")} alt="Spicetify" />
       <div className="cinefy-splash-load">
         <div className="cinefy-splash-bar"><span style={{ width: `${splashProgress}%` }} /></div>
         <div className="cinefy-splash-line" key={splashLine}>{SPLASH_LINES[splashLine % SPLASH_LINES.length]}</div>
       </div>
+      <button type="button" className="cinefy-splash-skip" onClick={(e) => { e.stopPropagation(); skipSplash(); }}>Skip intro →</button>
     </div>}
     <audio ref={audioRef} onTimeUpdate={(event) => setProgress(event.currentTarget.currentTime)} onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || (selected?.fullUrl ? 0 : 30))} onEnded={handleEnded} onError={() => {
     const a = audioRef.current;
@@ -7091,7 +7173,7 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
         <header className="cinefy-header">
           <div className="cinefy-header-left">
             {tab !== "home" && <button className="cinefy-back" onClick={() => setTab("home")}>←</button>}
-            {tab === "search" && <form className="cinefy-search cinefy-search-bar" onSubmit={(e) => { e.preventDefault(); void searchTracks(searchQuery); }}>
+            {tab === "search" && <form className="cinefy-search cinefy-search-bar" onSubmit={(e) => { e.preventDefault(); void runSearch(searchQuery); }}>
               <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t("sp.searchPlaceholder")} aria-label="Search music" autoFocus />
             </form>}
             {tab === "marketplace" && <form className="cinefy-search cinefy-search-bar" onSubmit={(e) => e.preventDefault()}>
@@ -7104,7 +7186,6 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
             {tab === "hazy" && <h2 className="cinefy-page-title"><Sparkles size={20} className="cinefy-hazy-title-icon" /> {t("sp.hazySettings")}</h2>}
             {tab === "nowplaying" && <h2 className="cinefy-page-title"><Music2 size={20} /> {t("sp.nowPlaying")}</h2>}
           </div>
-          <div className="cinefy-header-right"><button className="window-control cinefy-close" onClick={onMinimize} aria-label={t("sp.minimize")}><Minus size={16} /></button><button className="window-control close cinefy-close" onClick={() => { onTrackChange(null); onClose(); }} aria-label={t("sp.close")}><X size={16} /></button></div>
         </header>
 
         <div className="cinefy-content">
@@ -7135,10 +7216,6 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
           </section>}
 
           {tab === "search" && <section>
-            <div className="cinefy-search-modes">
-              <button type="button" className={`cinefy-search-mode ${!fullMode ? "on" : ""}`} onClick={() => { setFullMode(false); if (searchQuery) void searchTracks(searchQuery); }}>Preview · 30s</button>
-              <button type="button" className={`cinefy-search-mode ${fullMode ? "on" : ""}`} onClick={() => { setFullMode(true); if (searchQuery) void searchFull(searchQuery); }}>Full songs · open library</button>
-            </div>
             {!searchQuery && <div className="cinefy-search-categories">
               {["Lo-fi", "Hip Hop", "Pop", "Rock", "R&B", "Jazz", "Classical", "Electronic", "Anime", "K-Pop"].map((genre) => <button key={genre} className="cinefy-genre-card" onClick={() => { setSearchQuery(genre); runSearch(genre); }}>{genre}</button>)}
             </div>}

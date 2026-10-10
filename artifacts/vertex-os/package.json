@@ -74,6 +74,8 @@
     "zod": "3.25.76"
   },
   "dependencies": {
+    "@mercuryworkshop/epoxy-tls": "2.1.18-1",
+    "@mercuryworkshop/epoxy-transport": "2.1.28",
     "@mercuryworkshop/libcurl-transport": "2.0.5",
     "@mercuryworkshop/scramjet": "2.0.67-alpha.2",
     "@mercuryworkshop/scramjet-controller": "0.0.14",

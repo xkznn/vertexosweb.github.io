@@ -1,9 +1,84 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { ArrowLeft, ArrowRight, House, Lock, RotateCcw, Search, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Globe, House, Lock, RotateCcw, Search, X, Zap } from "lucide-react";
 import type { Lang } from "../i18n";
 
 const BASE = import.meta.env.BASE_URL;
+
+/** Resolve the WISP websocket used by the proxy transport.
+ *  In local dev the Vite dev server hosts one at `/api/wisp/`; on static
+ *  hosting (GitHub Pages / Vercel) there is no such server, so fall back to
+ *  a public WISP relay. Override with VITE_WISP_URL when needed. */
+function resolveWispUrl(): string {
+  const override = (import.meta.env.VITE_WISP_URL as string | undefined)?.trim();
+  if (override) return override;
+  const host = location.hostname;
+  const isLocal = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "";
+  if (isLocal) return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${BASE}api/wisp/`;
+  return "wss://wisp.mercurywork.shop/";
+}
+
+/* ===== Browser preferences (search engine + proxy transport) ===== */
+
+type BrowserEngineId = "duckduckgo" | "brave" | "google" | "bing";
+type BrowserTransportId = "libcurl" | "epoxy";
+type BrowserSettings = { engine: BrowserEngineId; transport: BrowserTransportId };
+
+const BROWSER_SETTINGS_KEY = "vertex-browser-settings";
+
+const BROWSER_ENGINES: { id: BrowserEngineId; label: string; url: (q: string) => string }[] = [
+  { id: "duckduckgo", label: "DuckDuckGo", url: (q) => `https://duckduckgo.com/?q=${encodeURIComponent(q)}&ia=web` },
+  { id: "brave", label: "Brave", url: (q) => `https://search.brave.com/search?q=${encodeURIComponent(q)}` },
+  { id: "google", label: "Google", url: (q) => `https://www.google.com/search?q=${encodeURIComponent(q)}` },
+  { id: "bing", label: "Bing", url: (q) => `https://www.bing.com/search?q=${encodeURIComponent(q)}` },
+];
+
+const BROWSER_TRANSPORTS: { id: BrowserTransportId; label: string; note: string }[] = [
+  { id: "libcurl", label: "libcurl", note: "Reliable default transport" },
+  { id: "epoxy", label: "Epoxy", note: "Encrypted TLS transport" },
+];
+
+const BROWSER_DEFAULTS: BrowserSettings = { engine: "brave", transport: "libcurl" };
+
+function getBrowserSettings(): BrowserSettings {
+  try {
+    const raw = localStorage.getItem(BROWSER_SETTINGS_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Partial<BrowserSettings>) : {};
+    return { ...BROWSER_DEFAULTS, ...parsed };
+  } catch {
+    return { ...BROWSER_DEFAULTS };
+  }
+}
+
+function saveBrowserSettings(next: BrowserSettings) {
+  try {
+    localStorage.setItem(BROWSER_SETTINGS_KEY, JSON.stringify(next));
+  } catch {
+    /* storage disabled — ignore */
+  }
+}
+
+function browserSearchUrl(query: string): string {
+  const engine = BROWSER_ENGINES.find((item) => item.id === getBrowserSettings().engine) ?? BROWSER_ENGINES[1];
+  return engine.url(query);
+}
+
+/** Build a proxy transport for the chosen backend. Falls back to libcurl if
+ *  the Epoxy runtime cannot be loaded for any reason. */
+async function createTransport(kind: BrowserTransportId, wispUrl: string): Promise<unknown> {
+  if (kind === "epoxy") {
+    try {
+      const mod = (await import("@mercuryworkshop/epoxy-transport")) as {
+        default?: new (opts: { wisp: string }) => unknown;
+      };
+      if (mod.default) return new mod.default({ wisp: wispUrl });
+    } catch {
+      /* fall back to libcurl */
+    }
+  }
+  const { default: LibcurlClient } = await import("@mercuryworkshop/libcurl-transport");
+  return new LibcurlClient({ wisp: wispUrl });
+}
 
 type ScramjetFrame = {
   go: (url: string) => void;
@@ -85,21 +160,94 @@ function normalizeAddress(raw: string): string | null {
   const value = raw.trim();
   if (!value) return null;
   if (/^https?:\/\//i.test(value)) return value;
-  if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/i.test(value)) return `https://${value}`;
-  return `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(value)}`;
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#]\S*)?$/i.test(value)) return `https://${value}`;
+  return browserSearchUrl(value);
 }
 
-function ProxyBrowser({ initialUrl, home = false }: { initialUrl?: string; home?: boolean }) {
-  const [started, setStarted] = useState(!home);
-  const [status, setStatus] = useState<"idle" | "booting" | "ready">(home ? "idle" : "booting");
+/** Animated new-tab backdrop: slow drifting fog glow (CSS) with falling
+ *  rain streaks drawn on a canvas. Dependency-free and on-brand. */
+function BrowserBackdrop() {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    let raf = 0;
+    let w = 0;
+    let h = 0;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    type Drop = { x: number; y: number; len: number; sp: number; o: number };
+    let drops: Drop[] = [];
+
+    const resize = () => {
+      w = canvas.clientWidth;
+      h = canvas.clientHeight;
+      canvas.width = Math.max(1, Math.floor(w * dpr));
+      canvas.height = Math.max(1, Math.floor(h * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const count = Math.min(260, Math.max(50, Math.round((w * h) / 15000)));
+      drops = Array.from({ length: count }, () => ({
+        x: Math.random() * (w + 120),
+        y: Math.random() * h,
+        len: 12 + Math.random() * 26,
+        sp: 2.5 + Math.random() * 5,
+        o: 0.05 + Math.random() * 0.16,
+      }));
+    };
+
+    resize();
+    const rain: [number, number, number] = [120, 220, 255];
+
+    const draw = () => {
+      ctx.clearRect(0, 0, w, h);
+      for (const d of drops) {
+        d.y += d.sp;
+        d.x -= d.sp * 0.22;
+        if (d.y > h + 30) {
+          d.y = -30;
+          d.x = Math.random() * (w + 120);
+        }
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x + d.len * 0.22, d.y - d.len);
+        ctx.strokeStyle = `rgba(${rain[0]}, ${rain[1]}, ${rain[2]}, ${d.o})`;
+        ctx.stroke();
+      }
+      raf = requestAnimationFrame(draw);
+    };
+
+    draw();
+    window.addEventListener("resize", resize);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
+
+  return <canvas ref={ref} className="browser-bg-rain" aria-hidden="true" />;
+}
+
+function ProxyBrowser(_props: { home?: boolean }) {
+  const [input, setInput] = useState("");
+  const [settings, setSettings] = useState<BrowserSettings>(() => getBrowserSettings());
+  const [started, setStarted] = useState(false);
+  const [currentUrl, setCurrentUrl] = useState("");
+  const [status, setStatus] = useState<"idle" | "booting" | "ready">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [input, setInput] = useState(initialUrl ?? "");
-  const [currentUrl, setCurrentUrl] = useState<string | null>(initialUrl ?? null);
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const frameRef = useRef<ScramjetFrame | null>(null);
-  const initialRef = useRef(initialUrl ?? "");
-  const startedRef = useRef(!home);
+  const pendingUrlRef = useRef("");
+
+  const updateSetting = useCallback((patch: Partial<BrowserSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      saveBrowserSettings(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (!started) return;
@@ -118,15 +266,19 @@ function ProxyBrowser({ initialUrl, home = false }: { initialUrl?: string; home?
         await ensureServiceWorker();
         const ready = await navigator.serviceWorker.ready;
         if (cancelled) return;
-        const wispUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${BASE}api/wisp/`;
-        const { default: LibcurlClient } = await import("@mercuryworkshop/libcurl-transport");
-        const transport = new LibcurlClient({ wisp: wispUrl });
+        const wispUrl = resolveWispUrl();
+        const transport = await createTransport(getBrowserSettings().transport, wispUrl);
         const controller = new runtime.Controller({ serviceworker: ready.active, transport });
         await controller.wait();
         if (cancelled) return;
-        const frame = controller.createFrame(el, { plugins: buildPlugins((url) => { setCurrentUrl(url); setInput(url); }) });
+        const frame = controller.createFrame(el, {
+          plugins: buildPlugins((url) => {
+            setCurrentUrl(url);
+            setInput(url);
+          }),
+        });
         frameRef.current = frame;
-        if (initialRef.current) frame.go(initialRef.current);
+        if (pendingUrlRef.current) frame.go(pendingUrlRef.current);
         setStatus("ready");
       } catch (cause) {
         if (cancelled) return;
@@ -143,17 +295,16 @@ function ProxyBrowser({ initialUrl, home = false }: { initialUrl?: string; home?
   const go = useCallback((raw: string) => {
     const url = normalizeAddress(raw);
     if (!url) return;
-    initialRef.current = url;
+    pendingUrlRef.current = url;
     setInput(url);
     setCurrentUrl(url);
     setError(null);
-    if (!startedRef.current) {
-      startedRef.current = true;
+    if (!started) {
       setStarted(true);
       return;
     }
     frameRef.current?.go(url);
-  }, []);
+  }, [started]);
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -167,21 +318,19 @@ function ProxyBrowser({ initialUrl, home = false }: { initialUrl?: string; home?
           <button type="button" className="browser-nav-btn" title="Back" onClick={() => frameRef.current?.back()}><ArrowLeft size={15} /></button>
           <button type="button" className="browser-nav-btn" title="Forward" onClick={() => frameRef.current?.forward()}><ArrowRight size={15} /></button>
           <button type="button" className="browser-nav-btn" title="Reload" onClick={() => frameRef.current?.reload()}><RotateCcw size={15} /></button>
+          <button type="button" className="browser-nav-btn" title="Home" onClick={() => { setStarted(false); frameRef.current = null; setCurrentUrl(""); setInput(""); setError(null); }}><House size={15} /></button>
           <form className="browser-addr" onSubmit={onSubmit}>
-            <Lock className="browser-addr-icon" size={13} />
+            <Lock className="browser-addr-icon" size={14} />
             <input
               className="browser-addr-input"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Search or enter address"
+              placeholder="Search the web or type a URL"
               spellCheck={false}
               autoComplete="off"
             />
-            {input ? (
-              <button type="button" className="browser-open" title="Clear" onClick={() => setInput("")}><X size={13} /></button>
-            ) : null}
+            {input ? <button type="button" className="browser-open" title="Clear" onClick={() => setInput("")}><X size={15} /></button> : null}
           </form>
-          <button type="button" className="browser-nav-btn" title="Home" onClick={() => go("https://lite.duckduckgo.com/lite/")}><House size={15} /></button>
         </div>
       </div>
       <div className="browser-content">
@@ -189,29 +338,65 @@ function ProxyBrowser({ initialUrl, home = false }: { initialUrl?: string; home?
           <iframe
             ref={iframeRef}
             className="browser-frame"
-            title="Proxy browser"
-            allow="autoplay; clipboard-read; clipboard-write; camera; microphone; fullscreen; cross-origin-isolated"
+            title="Proxied page"
+            allow="autoplay; clipboard-read; clipboard-write; camera; microphone; fullscreen; gamepad; cross-origin-isolated"
             allowFullScreen
           />
         ) : (
           <div className="browser-home">
-            <div className="browser-brand-mark">
-              <img className="browser-brand-img" src={`${BASE}images/browser-icon.png`} alt="Vertex Browser" />
+            <BrowserBackdrop />
+            <div className="browser-home-inner">
+              <div className="browser-brand-mark">
+                <img className="browser-brand-img" src={`${BASE}images/browser-icon.png`} alt="Vertex Browser" />
+              </div>
+              <h1 className="browser-brand-name">VERTEX</h1>
+              <p className="browser-brand-sub">proxy browser</p>
+              <form className="browser-search" onSubmit={onSubmit}>
+                <Search className="browser-search-icon" size={18} />
+                <input
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  placeholder="Search the web or type a URL"
+                  spellCheck={false}
+                  autoComplete="off"
+                  autoFocus
+                />
+              </form>
+              <div className="browser-home-controls">
+                <div className="browser-ctl">
+                  <span className="browser-ctl-label"><Globe size={12} /> Search engine</span>
+                  <div className="browser-ctl-pills">
+                    {BROWSER_ENGINES.map((engine) => (
+                      <button
+                        key={engine.id}
+                        type="button"
+                        className={`browser-pill ${settings.engine === engine.id ? "on" : ""}`}
+                        onClick={() => updateSetting({ engine: engine.id })}
+                      >
+                        {engine.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="browser-ctl">
+                  <span className="browser-ctl-label"><Zap size={12} /> Transport</span>
+                  <div className="browser-ctl-pills">
+                    {BROWSER_TRANSPORTS.map((transport) => (
+                      <button
+                        key={transport.id}
+                        type="button"
+                        title={transport.note}
+                        className={`browser-pill ${settings.transport === transport.id ? "on" : ""}`}
+                        onClick={() => updateSetting({ transport: transport.id })}
+                      >
+                        {transport.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <p className="browser-hint">Bypass network filters and browse the open web from inside Vertex OS.</p>
             </div>
-            <h1 className="browser-brand-name">VERTEX</h1>
-            <p className="browser-brand-sub">proxy browser</p>
-            <form className="browser-search" onSubmit={onSubmit}>
-              <Search className="browser-search-icon" size={18} />
-              <input
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder="Search the web or type a URL"
-                spellCheck={false}
-                autoComplete="off"
-                autoFocus
-              />
-            </form>
-            <p className="browser-hint">Bypass network filters and browse the open web from inside Vertex OS.</p>
           </div>
         )}
         {status === "booting" ? <div className="browser-loading">Starting proxy…</div> : null}
@@ -247,9 +432,8 @@ export function ProxyUrlFrame({ url, title = "Proxied page" }: { url: string; ti
         await ensureServiceWorker();
         const ready = await navigator.serviceWorker.ready;
         if (cancelled) return;
-        const wispUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${BASE}api/wisp/`;
-        const { default: LibcurlClient } = await import("@mercuryworkshop/libcurl-transport");
-        const transport = new LibcurlClient({ wisp: wispUrl });
+        const wispUrl = resolveWispUrl();
+        const transport = await createTransport(getBrowserSettings().transport, wispUrl);
         const controller = new runtime.Controller({ serviceworker: ready.active, transport });
         await controller.wait();
         if (cancelled) return;

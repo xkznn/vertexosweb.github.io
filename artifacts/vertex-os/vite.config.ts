@@ -21,6 +21,12 @@ function scramjetRuntimePlugin(): Plugin {
   const serveProxyAsset = (server: ViteDevServer) => {
     server.middlewares.use((request, response, next) => {
       const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+      if (pathname.endsWith('epoxy.wasm')) {
+        response.setHeader('Content-Type', 'application/wasm');
+        response.setHeader('Cache-Control', 'public, max-age=3600');
+        createReadStream(path.join(appRoot, 'public/assets/epoxy.wasm')).on('error', next).pipe(response);
+        return;
+      }
       const file = proxyAssets.get(pathname);
       if (!file) {
         next();
