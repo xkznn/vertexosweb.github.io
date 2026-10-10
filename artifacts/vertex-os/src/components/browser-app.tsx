@@ -5,6 +5,19 @@ import type { Lang } from "../i18n";
 
 const BASE = import.meta.env.BASE_URL;
 
+/** Scramjet's default config paths are root-absolute ("/~/sj/", "/scramjet/...").
+ *  When the app is served from a subpath (e.g. GitHub Pages
+ *  /vertexosweb.github.io/) those resolve to the domain root, landing OUTSIDE
+ *  the service worker's scope — so the worker never sees them and the host
+ *  returns its own 404 page. Prefixing everything with BASE keeps every
+ *  proxied request inside the scope. */
+const SCRAMJET_CONFIG = {
+  prefix: `${BASE}~/sj/`,
+  scramjetPath: `${BASE}scramjet/scramjet.js`,
+  injectPath: `${BASE}controller/controller.inject.js`,
+  wasmPath: `${BASE}scramjet/scramjet.wasm`,
+};
+
 /** Resolve the WISP websocket used by the proxy transport.
  *  In local dev the Vite dev server hosts one at `/api/wisp/`; on static
  *  hosting (GitHub Pages / Vercel) there is no such server, so fall back to
@@ -93,6 +106,7 @@ type ScramjetController = {
 type ScramjetControllerCtor = new (opts: {
   serviceworker: ServiceWorker | null;
   transport: unknown;
+  config?: Record<string, unknown>;
 }) => ScramjetController;
 
 let runtimePromise: Promise<{ Controller: ScramjetControllerCtor }> | null = null;
@@ -268,7 +282,7 @@ function ProxyBrowser(_props: { home?: boolean }) {
         if (cancelled) return;
         const wispUrl = resolveWispUrl();
         const transport = await createTransport(getBrowserSettings().transport, wispUrl);
-        const controller = new runtime.Controller({ serviceworker: ready.active, transport });
+        const controller = new runtime.Controller({ serviceworker: ready.active, transport, config: SCRAMJET_CONFIG });
         await controller.wait();
         if (cancelled) return;
         const frame = controller.createFrame(el, {
@@ -434,7 +448,7 @@ export function ProxyUrlFrame({ url, title = "Proxied page" }: { url: string; ti
         if (cancelled) return;
         const wispUrl = resolveWispUrl();
         const transport = await createTransport(getBrowserSettings().transport, wispUrl);
-        const controller = new runtime.Controller({ serviceworker: ready.active, transport });
+        const controller = new runtime.Controller({ serviceworker: ready.active, transport, config: SCRAMJET_CONFIG });
         await controller.wait();
         if (cancelled) return;
         const frame = controller.createFrame(el, { plugins: [] });
