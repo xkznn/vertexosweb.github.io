@@ -5,6 +5,9 @@ import type { Lang } from "../i18n";
 
 const BASE = import.meta.env.BASE_URL;
 
+/** Browser brand logo (Brave favicon, per request). */
+const BROWSER_LOGO = "https://brave.com/favicon.ico";
+
 /** Scramjet's default config paths are root-absolute ("/~/sj/", "/scramjet/...").
  *  When the app is served from a subpath (e.g. GitHub Pages
  *  /vertexosweb.github.io/) those resolve to the domain root, landing OUTSIDE
@@ -35,9 +38,10 @@ function resolveWispUrl(): string {
 
 type BrowserEngineId = "duckduckgo" | "brave" | "google" | "bing";
 type BrowserTransportId = "libcurl" | "epoxy";
-type BrowserSettings = { engine: BrowserEngineId; transport: BrowserTransportId };
+type BrowserSettings = { engine: BrowserEngineId; transport: BrowserTransportId; v?: number };
 
 const BROWSER_SETTINGS_KEY = "vertex-browser-settings";
+const BROWSER_SETTINGS_VERSION = 2;
 
 const BROWSER_ENGINES: { id: BrowserEngineId; label: string; url: (q: string) => string }[] = [
   { id: "duckduckgo", label: "DuckDuckGo", url: (q) => `https://duckduckgo.com/?q=${encodeURIComponent(q)}&ia=web` },
@@ -47,17 +51,19 @@ const BROWSER_ENGINES: { id: BrowserEngineId; label: string; url: (q: string) =>
 ];
 
 const BROWSER_TRANSPORTS: { id: BrowserTransportId; label: string; note: string }[] = [
-  { id: "libcurl", label: "libcurl", note: "Reliable default transport" },
-  { id: "epoxy", label: "Epoxy", note: "Encrypted TLS transport" },
+  { id: "libcurl", label: "libcurl", note: "Stable transport (recommended)" },
+  { id: "epoxy", label: "Epoxy", note: "Experimental TLS transport" },
 ];
 
-const BROWSER_DEFAULTS: BrowserSettings = { engine: "brave", transport: "libcurl" };
+const BROWSER_DEFAULTS: BrowserSettings = { engine: "brave", transport: "libcurl", v: BROWSER_SETTINGS_VERSION };
 
 function getBrowserSettings(): BrowserSettings {
   try {
     const raw = localStorage.getItem(BROWSER_SETTINGS_KEY);
     const parsed = raw ? (JSON.parse(raw) as Partial<BrowserSettings>) : {};
-    return { ...BROWSER_DEFAULTS, ...parsed };
+    const merged = { ...BROWSER_DEFAULTS, ...parsed };
+    if ((parsed.v ?? 0) < BROWSER_SETTINGS_VERSION && parsed.transport === "epoxy") merged.transport = "libcurl";
+    return merged;
   } catch {
     return { ...BROWSER_DEFAULTS };
   }
@@ -76,21 +82,83 @@ function browserSearchUrl(query: string): string {
   return engine.url(query);
 }
 
+type RawHeaderPair = [string, string];
+type TransportResponse = { headers: unknown; [key: string]: unknown };
+type ProxyTransportLike = {
+  init?: () => Promise<void>;
+  request: (remote: URL, method: string, body: unknown, headers: RawHeaderPair[], signal?: AbortSignal) => Promise<TransportResponse>;
+  connect?: (...args: unknown[]) => unknown;
+};
+
+/** Scramjet consumes transport response headers as an iterable of [name, value]
+ *  pairs (ScramjetHeaders.fromRawHeaders). Some transports (Epoxy) hand back a
+ *  plain object or nothing at all, which makes scramjet throw
+ *  "TypeError: … is not iterable". Normalise everything to the pair array. */
+function normalizeHeaders(raw: unknown): RawHeaderPair[] {
+  if (!raw) return [];
+  if (raw instanceof Headers) return [...raw.entries()].map(([key, value]) => [key, value]);
+  if (raw instanceof Map) return [...raw.entries()].map(([key, value]) => [String(key), String(value)]);
+  if (Array.isArray(raw)) {
+    const out: RawHeaderPair[] = [];
+    for (const entry of raw) {
+      if (Array.isArray(entry) && entry.length >= 2) {
+        const value = entry[1];
+        out.push([String(entry[0]), Array.isArray(value) ? value.join(", ") : String(value)]);
+      }
+    }
+    return out;
+  }
+  if (typeof raw === "object") {
+    const out: RawHeaderPair[] = [];
+    for (const key of Object.keys(raw as Record<string, unknown>)) {
+      const value = (raw as Record<string, unknown>)[key];
+      if (Array.isArray(value)) for (const item of value) out.push([key, String(item)]);
+      else out.push([key, String(value)]);
+    }
+    return out;
+  }
+  return [];
+}
+
 /** Build a proxy transport for the chosen backend. Falls back to libcurl if
- *  the Epoxy runtime cannot be loaded for any reason. */
-async function createTransport(kind: BrowserTransportId, wispUrl: string): Promise<unknown> {
+ *  the Epoxy runtime cannot be loaded for any reason. The returned transport is
+ *  initialised and has its response headers normalised for scramjet. */
+async function createTransport(kind: BrowserTransportId, wispUrl: string): Promise<ProxyTransportLike> {
+  let transport: ProxyTransportLike;
   if (kind === "epoxy") {
     try {
-      const mod = (await import("@mercuryworkshop/epoxy-transport")) as {
-        default?: new (opts: { wisp: string }) => unknown;
+      const mod = (await import("@mercuryworkshop/epoxy-transport")) as unknown as {
+        default?: new (opts: { wisp: string }) => ProxyTransportLike;
       };
-      if (mod.default) return new mod.default({ wisp: wispUrl });
+      if (!mod.default) throw new Error("epoxy-transport missing default export");
+      transport = new mod.default({ wisp: wispUrl });
     } catch {
-      /* fall back to libcurl */
+      const { default: LibcurlClient } = await import("@mercuryworkshop/libcurl-transport");
+      transport = new LibcurlClient({ wisp: wispUrl }) as unknown as ProxyTransportLike;
     }
+  } else {
+    const { default: LibcurlClient } = await import("@mercuryworkshop/libcurl-transport");
+    transport = new LibcurlClient({ wisp: wispUrl }) as unknown as ProxyTransportLike;
   }
-  const { default: LibcurlClient } = await import("@mercuryworkshop/libcurl-transport");
-  return new LibcurlClient({ wisp: wispUrl });
+
+  try {
+    if (typeof transport.init === "function") await transport.init();
+  } catch {
+    /* some transports initialise lazily */
+  }
+
+  const originalRequest = transport.request.bind(transport);
+  const wrapped = Object.create(transport) as ProxyTransportLike;
+  wrapped.request = async (remote, method, body, headers, signal) => {
+    const response = await originalRequest(remote, method, body, headers, signal);
+    try {
+      response.headers = normalizeHeaders(response.headers);
+    } catch {
+      /* headers not writable — leave as-is */
+    }
+    return response;
+  };
+  return wrapped;
 }
 
 type ScramjetFrame = {
@@ -250,6 +318,7 @@ function ProxyBrowser(_props: { home?: boolean }) {
   const [currentUrl, setCurrentUrl] = useState("");
   const [status, setStatus] = useState<"idle" | "booting" | "ready">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const frameRef = useRef<ScramjetFrame | null>(null);
@@ -304,7 +373,7 @@ function ProxyBrowser(_props: { home?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [started]);
+  }, [started, attempt]);
 
   const go = useCallback((raw: string) => {
     const url = normalizeAddress(raw);
@@ -361,7 +430,7 @@ function ProxyBrowser(_props: { home?: boolean }) {
             <BrowserBackdrop />
             <div className="browser-home-inner">
               <div className="browser-brand-mark">
-                <img className="browser-brand-img" src={`${BASE}images/browser-icon.png`} alt="Vertex Browser" />
+                <img className="browser-brand-img" src={BROWSER_LOGO} alt="Vertex Browser" />
               </div>
               <h1 className="browser-brand-name">VERTEX</h1>
               <p className="browser-brand-sub">proxy browser</p>
@@ -413,8 +482,16 @@ function ProxyBrowser(_props: { home?: boolean }) {
             </div>
           </div>
         )}
-        {status === "booting" ? <div className="browser-loading">Starting proxy…</div> : null}
-        {error ? <div className="browser-proxy-error">{error}</div> : null}
+          {status === "booting" ? <div className="browser-loading">Starting proxy…</div> : null}
+          {error ? (
+            <div className="browser-proxy-error">
+              <p>{error}</p>
+              <div className="browser-error-actions">
+                <button type="button" className="browser-retry" onClick={() => { setError(null); setAttempt((n) => n + 1); }}>Retry</button>
+                <button type="button" className="browser-retry ghost" onClick={() => { updateSetting({ transport: settings.transport === "epoxy" ? "libcurl" : "epoxy" }); setError(null); setAttempt((n) => n + 1); }}>Switch transport</button>
+              </div>
+            </div>
+          ) : null}
       </div>
     </div>
   );
@@ -430,6 +507,7 @@ export function ProxyUrlFrame({ url, title = "Proxied page" }: { url: string; ti
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [status, setStatus] = useState<"booting" | "ready">("booting");
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const urlRef = useRef(url);
 
   useEffect(() => {
@@ -464,7 +542,7 @@ export function ProxyUrlFrame({ url, title = "Proxied page" }: { url: string; ti
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   return (
     <div className="proxy-url-frame">
@@ -476,7 +554,15 @@ export function ProxyUrlFrame({ url, title = "Proxied page" }: { url: string; ti
         allowFullScreen
       />
       {status === "booting" ? <div className="browser-loading">Starting proxy…</div> : null}
-      {error ? <div className="browser-proxy-error">{error}</div> : null}
+      {error ? (
+        <div className="browser-proxy-error">
+          <p>{error}</p>
+          <div className="browser-error-actions">
+            <button type="button" className="browser-retry" onClick={() => { setError(null); setStatus("booting"); setAttempt((n) => n + 1); }}>Retry</button>
+            <button type="button" className="browser-retry ghost" onClick={() => { const cur = getBrowserSettings().transport; saveBrowserSettings({ ...getBrowserSettings(), transport: cur === "epoxy" ? "libcurl" : "epoxy" }); setError(null); setStatus("booting"); setAttempt((n) => n + 1); }}>Switch transport</button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

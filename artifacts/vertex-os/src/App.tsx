@@ -380,7 +380,7 @@ const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; icon
   { id: "hub", title: "Vertex-Hub", subtitle: t("appSub.hub"), icon: Sparkles, iconImg: asset("images/velara.png"), pinned: true },
   { id: "spicetify", title: "Spicetify", subtitle: t("appSub.spicetify"), icon: Music2, iconImg: asset("images/spicetify.ico"), pinned: true },
   { id: "wallpaper-engine", title: "Wallpaper Engine", subtitle: t("appSub.wallpaperEngine"), icon: Image, iconImg: asset("images/wallpaper-engine.gif"), pinned: true, squircle: true },
-  { id: "browser", title: "Browser", subtitle: t("appSub.browser"), icon: Compass, iconImg: asset("images/endis-rest.png"), pinned: true },
+  { id: "browser", title: "Browser", subtitle: t("appSub.browser"), icon: Compass, iconImg: "https://brave.com/favicon.ico", pinned: true },
   { id: "pizza", title: "Pizza edition", subtitle: t("appSub.pizza"), icon: Compass, iconImg: asset("images/pizza.ico"), pinned: true },
   { id: "roblox", title: "Roblox", subtitle: t("appSub.roblox"), icon: Gamepad2, iconImg: asset("images/roblox.ico"), pinned: true },
   { id: "messages", title: "Messages", subtitle: t("appSub.messages"), icon: MessageCircle, iconImg: asset("images/messages-icon.webp"), pinned: true },
