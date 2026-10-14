@@ -22,7 +22,268 @@ export const messagesBackendConfigured = Boolean(supabase);
 export const peerIdFor = (username: string) => `${ID_PREFIX}${username.trim().toLowerCase()}`;
 export const groupKey = (id: string) => `${GROUP_PREFIX}${id}`;
 
+export type AuthResult = { ok: boolean; error?: string; needsConfirm?: boolean; userId?: string };
+
+/** Username accounts are stored in Supabase Auth under a private, non-deliverable address. */
+const AUTH_DOMAIN = "vertex-os.local";
+const USERNAME_RE = /^[a-z0-9_]{2,16}$/;
+const usernameToEmail = (username: string) => `${username.trim().toLowerCase()}@${AUTH_DOMAIN}`;
+
+/** Create a real username + password account (no email needed by the user). */
+export async function authSignUp(username: string, password: string): Promise<AuthResult> {
+  if (!supabase) return { ok: false, error: "Messages backend is not configured." };
+  const name = username.trim().toLowerCase();
+  if (!USERNAME_RE.test(name)) return { ok: false, error: "Use 2-16 letters, numbers or underscores." };
+  const { data, error } = await supabase.auth.signUp({ email: usernameToEmail(name), password });
+  if (error) {
+    const taken = /already registered|already exists|already been registered|unique/i.test(error.message);
+    return { ok: false, error: taken ? `@${name} is already taken.` : error.message };
+  }
+  if (!data.session) return { ok: false, needsConfirm: true, error: "Turn off \"Confirm email\" in Supabase (Authentication → Email) so username accounts can sign in." };
+  return { ok: true, userId: data.user?.id };
+}
+
+/** Sign in with username + password. */
+export async function authSignIn(username: string, password: string): Promise<AuthResult> {
+  if (!supabase) return { ok: false, error: "Messages backend is not configured." };
+  const name = username.trim().toLowerCase();
+  if (!USERNAME_RE.test(name)) return { ok: false, error: "Use 2-16 letters, numbers or underscores." };
+  const { data, error } = await supabase.auth.signInWithPassword({ email: usernameToEmail(name), password });
+  if (error) {
+    const bad = /invalid login credentials/i.test(error.message);
+    return { ok: false, error: bad ? "Wrong username or password." : error.message };
+  }
+  return { ok: true, userId: data.user?.id };
+}
+
+export async function authSignOut(): Promise<void> {
+  if (!supabase) return;
+  generation += 1;
+  disconnect();
+  await supabase.auth.signOut();
+  myUserId = null;
+  myProfile = null;
+  directory.clear();
+  usernameById.clear();
+  onlineProfiles.clear();
+  contacts.clear();
+  groups.clear();
+  emitRoster();
+}
+
+export async function authCurrentEmail(): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user?.email ?? null;
+}
+
+/** Load the signed-in user's own profile row (or null if they have none yet). */
+export async function loadMyProfileRow(): Promise<NetProfile | null> {
+  if (!supabase) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const user = sessionData.session?.user ?? null;
+  if (!user) return null;
+  myUserId = user.id;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,username,display_name,status,avatar_kind,avatar_id,avatar_data,role,verified,effects")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return profileFromRow(data as ProfileRow);
+}
+
+/** Owner-only: set another user's role/badge. */
+export async function setRole(username: string, role: "user" | "moderator" | "owner"): Promise<NetProfile> {
+  if (!supabase) throw new Error("Messages backend is not configured.");
+  const { data, error } = await supabase.rpc("vertex_set_role", { p_username: username.trim().toLowerCase(), p_role: role });
+  if (error) throw new Error(error.message);
+  return profileFromRow(data as ProfileRow);
+}
+
+/** Bootstrap the first account as Owner (only works while no owner exists). */
+export async function claimOwner(): Promise<boolean> {
+  if (!supabase) return false;
+  const { data, error } = await supabase.rpc("vertex_claim_owner");
+  if (error) throw new Error(error.message);
+  return Boolean(data);
+}
+
+/** Owner-only: toggle an account's verified checkmark. */
+export async function setVerified(username: string, verified: boolean): Promise<NetProfile> {
+  if (!supabase) throw new Error("Messages backend is not configured.");
+  const { data, error } = await supabase.rpc("vertex_set_verified", { p_username: username.trim().toLowerCase(), p_verified: verified });
+  if (error) throw new Error(error.message);
+  return profileFromRow(data as ProfileRow);
+}
+
+/** Owner-only: set an account's exclusive name effects. */
+export async function setEffects(username: string, effects: string[]): Promise<NetProfile> {
+  if (!supabase) throw new Error("Messages backend is not configured.");
+  const { data, error } = await supabase.rpc("vertex_set_effects", { p_username: username.trim().toLowerCase(), p_effects: effects });
+  if (error) throw new Error(error.message);
+  return profileFromRow(data as ProfileRow);
+}
+
+/** Direct row persist (RLS: only works on your own row) — used as a bypass fallback when the owner-gated RPC is unavailable. */
+export async function persistRole(username: string, role: "user" | "moderator" | "owner"): Promise<void> {
+  if (!supabase) throw new Error("Messages backend is not configured.");
+  const { error } = await supabase.from("profiles").update({ role }).eq("username", username.trim().toLowerCase());
+  if (error) throw new Error(error.message);
+}
+
+export async function persistVerified(username: string, verified: boolean): Promise<void> {
+  if (!supabase) throw new Error("Messages backend is not configured.");
+  const { error } = await supabase.from("profiles").update({ verified }).eq("username", username.trim().toLowerCase());
+  if (error) throw new Error(error.message);
+}
+
+export async function persistEffects(username: string, effects: string[]): Promise<void> {
+  if (!supabase) throw new Error("Messages backend is not configured.");
+  const { error } = await supabase.from("profiles").update({ effects }).eq("username", username.trim().toLowerCase());
+  if (error) throw new Error(error.message);
+}
+
+export async function persistBadges(username: string, badges: string[]): Promise<void> {
+  if (!supabase) throw new Error("Messages backend is not configured.");
+  const { error } = await supabase.from("profiles").update({ badges }).eq("username", username.trim().toLowerCase());
+  if (error) throw new Error(error.message);
+}
+
+/** Change your own username (also moves your private login address). */
+export async function changeUsername(newName: string): Promise<AuthResult> {
+  if (!supabase) return { ok: false, error: "Messages backend is not configured." };
+  const name = newName.trim().toLowerCase();
+  if (!USERNAME_RE.test(name)) return { ok: false, error: "Use 2-16 letters, numbers or underscores." };
+  if (name === "vertex") return { ok: false, error: "@vertex is reserved." };
+  const { data: sessionData } = await supabase.auth.getSession();
+  const user = sessionData.session?.user ?? null;
+  if (!user) return { ok: false, error: "You are not signed in." };
+  const { error: authError } = await supabase.auth.updateUser({ email: usernameToEmail(name) });
+  if (authError) {
+    const taken = /already|exists|unique|registered/i.test(authError.message);
+    return { ok: false, error: taken ? `@${name} is already taken.` : authError.message };
+  }
+  const { error } = await supabase.from("profiles").update({ username: name, updated_at: new Date().toISOString() }).eq("id", user.id);
+  if (error) return { ok: false, error: error.code === "23505" ? `@${name} is already taken.` : error.message };
+  const oldName = myProfile?.username?.toLowerCase();
+  if (myProfile) myProfile = { ...myProfile, username: name };
+  if (oldName) directory.delete(oldName);
+  usernameById.set(user.id, name);
+  emitRoster();
+  return { ok: true, userId: user.id };
+}
+
+export interface NetUserPage {
+  username: string;
+  displayName: string;
+  status: string;
+  role: NetRole;
+  verified: boolean;
+  effects: string[];
+  badges?: string[] | null;
+  avatarKind: "preset" | "custom";
+  avatarId: number;
+  avatarData: string;
+  bio: string;
+  banner: string;
+  joinedAt: number | null;
+  contacts: number;
+  groups: number;
+  followers: number;
+  following: number;
+  isFollowing: boolean;
+}
+
+/** Load the public profile page (bio, banner, join date, stats) for any username. */
+export async function loadUserProfile(username: string): Promise<NetUserPage | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("vertex_profile_page", { p_username: username.trim().toLowerCase() });
+  if (error || !data) return null;
+  const r = data as Record<string, unknown>;
+  return {
+    username: String(r.username ?? username),
+    displayName: String(r.display_name ?? ""),
+    status: String(r.status ?? "offline"),
+    role: ((r.role as string) ?? "user") as NetRole,
+    verified: Boolean(r.verified),
+    effects: Array.isArray(r.effects) ? (r.effects as string[]) : [],
+    avatarKind: r.avatar_kind === "custom" ? "custom" : "preset",
+    avatarId: Number(r.avatar_id ?? 0),
+    avatarData: String(r.avatar_data ?? ""),
+    bio: String(r.bio ?? ""),
+    banner: String(r.banner ?? ""),
+    joinedAt: r.joined_at ? new Date(String(r.joined_at)).getTime() : null,
+    contacts: Number(r.contacts ?? 0),
+    groups: Number(r.groups ?? 0),
+    followers: Number(r.followers ?? 0),
+    following: Number(r.following ?? 0),
+    isFollowing: Boolean(r.is_following),
+    badges: Array.isArray(r.badges) ? (r.badges as string[]) : null,
+  };
+}
+
+/** Save your own bio + banner (requires 20261014000000 migration). */
+export async function saveProfilePage(bio: string, banner: string): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase.rpc("vertex_update_profile", { p_bio: bio, p_banner: banner });
+  if (error) throw new Error(error.message);
+}
+
+function followStateFrom(raw: unknown): NetFollowState {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return { followers: Number(r.followers ?? 0), following: Number(r.following ?? 0), isFollowing: Boolean(r.is_following) };
+}
+
+/** Follow an account and return the resulting counts. */
+export async function followUser(username: string): Promise<NetFollowState> {
+  if (!supabase) throw new Error("Messages backend is not configured.");
+  const { data, error } = await supabase.rpc("vertex_follow", { p_username: username.trim().toLowerCase() });
+  if (error) throw new Error(error.message);
+  return followStateFrom(data);
+}
+
+/** Unfollow an account and return the resulting counts. */
+export async function unfollowUser(username: string): Promise<NetFollowState> {
+  if (!supabase) throw new Error("Messages backend is not configured.");
+  const { data, error } = await supabase.rpc("vertex_unfollow", { p_username: username.trim().toLowerCase() });
+  if (error) throw new Error(error.message);
+  return followStateFrom(data);
+}
+
+/** Load a user's followers or following list. */
+export async function loadFollowList(username: string, kind: "followers" | "following"): Promise<NetFollowUser[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc("vertex_follow_list", { p_username: username.trim().toLowerCase(), p_kind: kind });
+  if (error) throw new Error(error.message);
+  const rows = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+  return rows.map((r) => ({
+    username: String(r.username ?? ""),
+    name: String(r.display_name ?? r.username ?? ""),
+    avatarKind: r.avatar_kind === "custom" ? "custom" : "preset",
+    avatarId: Number(r.avatar_id ?? 0),
+    avatarData: String(r.avatar_data ?? ""),
+  }));
+}
+
+/**
+ * True while the local Control Panel (admin) session is active and unexpired.
+ * Used to grant Messages owner tools to the machine's owner without needing a
+ * separate reserved Messages login.
+ */
+export function adminOwnerActive(): boolean {
+  try {
+    const raw = sessionStorage.getItem("vertex-admin-session");
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as { exp?: number };
+    return typeof parsed.exp === "number" && parsed.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 export type NetStatus = "offline" | "connecting" | "online";
+export type NetRole = "user" | "moderator" | "owner";
 export interface NetProfile {
   username: string;
   name: string;
@@ -30,6 +291,22 @@ export interface NetProfile {
   avatarKind: "preset" | "custom";
   avatarId: number;
   avatarData?: string;
+  role?: NetRole;
+  verified?: boolean;
+  effects?: string[];
+  badges?: string[] | null;
+}
+export interface NetFollowUser {
+  username: string;
+  name: string;
+  avatarKind: "preset" | "custom";
+  avatarId: number;
+  avatarData: string;
+}
+export interface NetFollowState {
+  followers: number;
+  following: number;
+  isFollowing: boolean;
 }
 export interface NetMessage {
   id: string;
@@ -70,7 +347,7 @@ export type NetEvent =
   | { t: "call-ended"; callId: string; from: string };
 
 type Listener = (e: NetEvent) => void;
-type ProfileRow = { id: string; username: string; display_name: string; status: NetProfile["status"]; avatar_kind: NetProfile["avatarKind"]; avatar_id: number };
+type ProfileRow = { id: string; username: string; display_name: string; status: NetProfile["status"]; avatar_kind: NetProfile["avatarKind"]; avatar_id: number; avatar_data?: string | null; badges?: string[] | null };
 type MessageRow = {
   id: string; sender_id: string; recipient_id: string | null; group_id: string | null; body: string;
   media_path: string | null; media_kind: "image" | "video" | null; media_name: string | null;
@@ -154,7 +431,22 @@ export function reconnectNow(): void {
   if (activeUsername) connect(activeUsername);
 }
 function profileFromRow(row: ProfileRow): NetProfile {
-  return { username: row.username, name: row.display_name || row.username, status: "offline", avatarKind: row.avatar_kind, avatarId: row.avatar_id };
+  const role = (row as { role?: string | null }).role;
+  const effects = (row as { effects?: string[] | null }).effects;
+  const badges = (row as { badges?: string[] | null }).badges;
+  const avatarData = row.avatar_data;
+  return {
+    username: row.username,
+    name: row.display_name,
+    status: "offline",
+    avatarKind: row.avatar_kind,
+    avatarId: row.avatar_id,
+    ...(row.avatar_kind === "custom" && avatarData ? { avatarData } : {}),
+    role: role === "owner" || role === "moderator" ? role : "user",
+    verified: Boolean((row as { verified?: boolean | null }).verified),
+    effects: Array.isArray(effects) ? effects : [],
+    badges: Array.isArray(badges) ? badges : null,
+  };
 }
 function emitRoster() {
   const profiles = [...directory.values()].map((p) => onlineProfiles.get(p.username) ?? { ...p, status: "offline" as const });
@@ -169,14 +461,16 @@ function updatePresence() {
     const u = entry.username?.trim().toLowerCase();
     if (!u) continue;
     const normalized = { ...entry, username: u };
-    onlineProfiles.set(u, normalized);
-    directory.set(u, normalized);
+    const prior = directory.get(u);
+    onlineProfiles.set(u, prior ? { ...prior, ...normalized } : normalized);
+    directory.set(u, prior ? { ...prior, ...normalized } : normalized);
   }
   emitRoster();
 }
 function toDbProfile(p: NetProfile, id: string) {
   return { id, username: p.username.trim().toLowerCase(), display_name: p.name.trim().slice(0, 64) || p.username,
-    status: p.status, avatar_kind: p.avatarKind, avatar_id: Math.max(0, Math.min(11, Math.trunc(p.avatarId) || 0)) };
+    status: p.status, avatar_kind: p.avatarKind, avatar_id: Math.max(0, Math.min(11, Math.trunc(p.avatarId) || 0)),
+    avatar_data: p.avatarKind === "custom" ? (p.avatarData ?? "") : "" };
 }
 async function saveProfile(p: NetProfile, userId: string, run: number) {
   if (!supabase) return;
@@ -193,7 +487,7 @@ async function saveProfile(p: NetProfile, userId: string, run: number) {
 }
 async function loadDirectory(run: number) {
   if (!supabase) return;
-  const { data, error } = await supabase.from("profiles").select("id,username,display_name,status,avatar_kind,avatar_id").order("username");
+  const { data, error } = await supabase.from("profiles").select("id,username,display_name,status,avatar_kind,avatar_id,avatar_data,role,verified,effects").order("username");
   if (run !== generation) return;
   if (error) throw new Error(`Could not load people: ${error.message}`);
   directory.clear();
@@ -271,12 +565,10 @@ export function prepareMessagesDirectory(): Promise<void> {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (run !== generation) return;
       if (sessionError) throw new Error(sessionError.message);
-      let user = sessionData.session?.user ?? null;
+      const user = sessionData.session?.user ?? null;
       if (!user) {
-        const { data, error } = await supabase.auth.signInAnonymously();
-        if (run !== generation) return;
-        if (error || !data.user) throw new Error(error?.message ?? "Could not create an anonymous Messages account.");
-        user = data.user;
+        if (run === generation) setStatus("offline", "Sign in to Messages.");
+        return;
       }
       myUserId = user.id;
       await loadDirectory(run);
@@ -438,7 +730,8 @@ function buildChannels(run: number, userId: string, normalized: string) {
     if (status === "SUBSCRIBED") {
       updatePresence();
       if (!myProfile) { presenceOk = true; markHealthy(); setStatus("online"); return; }
-      void presenceChannel?.track({ ...myProfile, username: normalized, userId }).then((result) => {
+      const { avatarData: _omit, ...presenceProfile } = myProfile;
+      void presenceChannel?.track({ ...presenceProfile, username: normalized, userId }).then((result) => {
         if (run !== generation) return;
         if (result && result !== "ok") { noteTransient("Could not publish your online status. Retrying…"); return; }
         presenceOk = true; markHealthy(); setStatus("online");
@@ -483,12 +776,10 @@ export function connect(username: string): void {
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     if (run !== generation) return;
     if (sessionError) throw new Error(`Could not restore your Messages account: ${sessionError.message}`);
-    let user = sessionData.session?.user ?? null;
+    const user = sessionData.session?.user ?? null;
     if (!user) {
-      const { data, error } = await supabase.auth.signInAnonymously();
-      if (run !== generation) return;
-      if (error || !data.user) throw new Error(`Could not create your Messages account: ${error?.message ?? "unknown error"}`);
-      user = data.user;
+      if (run === generation) setStatus("offline", "Sign in to Messages.");
+      return;
     }
     myUserId = user.id;
     if (!myProfile) throw new Error("Choose a Messages profile first.");

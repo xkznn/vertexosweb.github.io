@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
-import { Check, ChevronRight, Gamepad2, Home, Loader2, Monitor, PanelsTopLeft, Play, Plus, Search, Settings, Sparkles, Trash2, UserPlus, X } from "lucide-react";
+import { Check, ChevronRight, Download, Gamepad2, Home, Loader2, Maximize, Minimize, Monitor, MoreHorizontal, Music, PanelsTopLeft, Pause, Play, Plus, Power, Search, Settings, SkipBack, SkipForward, Sparkles, Star, Trash2, UserPlus, Volume2, VolumeX, X } from "lucide-react";
 import Peer from "peerjs";
 import { PS5_GAMES, PS5_TOTAL, type Ps5Game } from "../ps5-games";
-import { publishNowPlaying } from "../now-playing";
+import { getMediaSession, publishNowPlaying, subscribeMediaSession } from "../now-playing";
 import { MessagesSurface } from "../messages";
+import { BrowserSurface, ProxyUrlFrame } from "./browser-app";
 import { VerAiSurface } from "./ver-ai";
+import { getAudioSettings, sfx, subscribeAudio, unlockAudio, setAudioSettings, setMusicEnabled, bindAudioVisibility, stopMusic, type AudioSettings } from "../ps5-audio";
 
-type Tab = "home" | "featured" | "media";
+type Tab = "home" | "media";
 type DeviceMode = "pc" | "controller";
 type MediaApp = {
   id: string;
@@ -28,7 +30,7 @@ export type Ps5EmbeddedSurfaces = {
 };
 
 const MEDIA_APPS: MediaApp[] = [
-  { id: "browser", name: "Browser", publisher: "Vertex OS", kind: "frame", icon: `${import.meta.env.BASE_URL}images/endis-rest.png`, cover: `${import.meta.env.BASE_URL}images/endis-rest.png`, src: "https://endis.rest/", external: "https://endis.rest/", description: "Browse the web from the console." },
+  { id: "browser", name: "Browser", publisher: "Vertex OS", kind: "app", icon: `${import.meta.env.BASE_URL}images/browser-icon.svg`, cover: `${import.meta.env.BASE_URL}images/browser-icon.svg`, description: "Browse the web with the built-in Vertex browser." },
   { id: "spotify", name: "Spotify", publisher: "Spicetify", kind: "app", icon: `${import.meta.env.BASE_URL}images/spicetify.ico`, cover: `${import.meta.env.BASE_URL}images/spicetify.ico`, description: "Your music and playlists, running inside the console." },
   { id: "vertube", name: "VerTube", publisher: "Vertex OS", kind: "app", icon: `${import.meta.env.BASE_URL}images/vertube.svg`, cover: `${import.meta.env.BASE_URL}images/vertube.svg`, description: "VER-TUBE, streaming from inside the console." },
   { id: "messages", name: "Messages", publisher: "Vertex OS", kind: "app", icon: `${import.meta.env.BASE_URL}images/messages-icon.webp`, cover: `${import.meta.env.BASE_URL}images/messages-icon.webp`, description: "Your Messages chats, already signed in." },
@@ -37,8 +39,25 @@ const MEDIA_APPS: MediaApp[] = [
 
 const OWNED_KEY = "vertex-ps5-owned";
 const RECENT_KEY = "vertex-ps5-recent";
+const FAVORITES_KEY = "vertex-ps5-favorites";
+const THEME_KEY = "vertex-ps5-theme";
 const ACCOUNT_KEY = "vertex-ps5-account";
 const MSGS_PROFILE_KEY = "vertex-msgs-profile-v2";
+
+const THEMES = [
+  { id: "blue", name: "Blue", accent: "#438cff", soft: "#75a7ff" },
+  { id: "green", name: "Green", accent: "#75f6a0", soft: "#9dffbe" },
+  { id: "violet", name: "Violet", accent: "#a78bfa", soft: "#c4b5fd" },
+  { id: "sunset", name: "Sunset", accent: "#ff9f68", soft: "#ffc29b" },
+];
+
+function readTheme(): string {
+  try {
+    const raw = localStorage.getItem(THEME_KEY);
+    if (raw && THEMES.some((t) => t.id === raw)) return raw;
+  } catch { /* ignore */ }
+  return "blue";
+}
 
 const USERNAME_RE = /^[a-z0-9]{3,16}$/;
 const NAME_RE = /^.{1,20}$/;
@@ -87,7 +106,6 @@ function hasMessagesProfile(): boolean {
   return accountFromMessages() !== null;
 }
 
-
 function avatarStyle(hue?: number) {
   return { background: `linear-gradient(145deg, hsl(${hue ?? 212} 82% 76%), hsl(${(hue ?? 212) + 34} 62% 48%))` };
 }
@@ -130,7 +148,107 @@ function fmtTime(sec: number) {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-const PS5_BOOT_IMG = `${import.meta.env.BASE_URL}images/ps5-boot.png`;
+/** The console is a fixed 1280x720 stage scaled to fit whatever window hosts it. */
+function useConsoleScale(active = true): [React.RefObject<HTMLDivElement | null>, number] {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    if (!active) return;
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setScale(r.width > 0 && r.height > 0 ? Math.min(r.width / 1280, r.height / 720) : 1);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [active]);
+  return [ref, scale];
+}
+
+function useClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 10000);
+    return () => window.clearInterval(t);
+  }, []);
+  return now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+// Deterministic art colour for the console hero, derived from the game id.
+function artColorFor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return `hsl(${hash % 360} 34% 22%)`;
+}
+
+function NowPlayingCard() {
+  const [, bump] = useState(0);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const rerender = () => bump((n) => n + 1);
+    const unsubscribe = subscribeMediaSession(rerender);
+    const id = window.setInterval(rerender, 250);
+    return () => { unsubscribe(); window.clearInterval(id); };
+  }, []);
+  const session = getMediaSession();
+  const active = Boolean(session && session.source === "music" && session.title);
+  useEffect(() => {
+    if (!active) { setVisible(false); return; }
+    const id = window.setTimeout(() => setVisible(true), 20);
+    return () => window.clearTimeout(id);
+  }, [active]);
+  if (!session || session.source !== "music" || !session.title) return null;
+  const progress = Math.max(0, session.progress || 0);
+  const duration = Math.max(0, session.duration || 0);
+  const max = duration > 0 ? duration : Math.max(progress, 1);
+  const volume = typeof session.volume === "number" ? session.volume : 1;
+  const muted = Boolean(session.muted);
+  const pct = Math.round((muted ? 0 : volume) * 100);
+  return (
+    <aside className={`vs-npc${visible ? " open" : ""}`} aria-label="Now playing" onKeyDown={(event) => event.stopPropagation()}>
+      <div className="vs-npc-art">
+        {session.artwork
+          ? <img key={session.artwork} src={session.artwork} alt="" draggable={false} />
+          : <span className="vs-npc-art-fallback"><Music size={32} /></span>}
+      </div>
+      <div className="vs-npc-body">
+        <p className="vs-npc-title" key={`t:${session.title}`} title={session.title}>{session.title}</p>
+        {session.artist ? <p className="vs-npc-artist" title={session.artist}>{session.artist}</p> : null}
+        <div className="vs-npc-progress">
+          <span>{fmtTime(Math.floor(progress))}</span>
+          <input type="range" min={0} max={max} step={0.1} value={Math.min(progress, max)} onChange={(event) => session.onSeek?.(Number(event.target.value))} aria-label="Seek" style={{ "--vs-npc-fill": `${max > 0 ? Math.min(100, (Math.min(progress, max) / max) * 100) : 0}%` } as CSSProperties} />
+          <span>{fmtTime(Math.floor(duration))}</span>
+        </div>
+        <div className="vs-npc-controls">
+          <button type="button" className="vs-npc-btn vs-npc-prev" aria-label="Previous track" onClick={() => session.onPrev?.()} disabled={!session.onPrev}><SkipBack size={20} /></button>
+          <button type="button" className="vs-npc-btn vs-npc-play" aria-label={session.playing ? "Pause" : "Play"} onClick={() => session.onToggle?.()} disabled={!session.onToggle}>{session.playing ? <Pause size={24} /> : <Play size={24} />}</button>
+          <button type="button" className="vs-npc-btn vs-npc-next" aria-label="Next track" onClick={() => session.onNext?.()} disabled={!session.onNext}><SkipForward size={20} /></button>
+        </div>
+        <div className="vs-npc-volume">
+          <button type="button" className="vs-npc-btn vs-npc-mute" aria-label={muted ? "Unmute" : "Mute"} onClick={() => session.onToggleMute?.()} disabled={!session.onToggleMute}>{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={muted ? 0 : volume}
+            onChange={(event) => { const next = Number(event.target.value); session.onSetVolume?.(next); if (muted && next > 0) session.onToggleMute?.(); }}
+            aria-label="Volume"
+            style={{ "--vs-npc-fill": `${(muted ? 0 : volume) * 100}%` } as CSSProperties}
+          />
+          <span className="vs-npc-pct">{pct}%</span>
+        </div>
+      </div>
+    </aside>
+  );
+}
 
 export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurfaces } = {}) {
   const [stage, setStage] = useState<"boot" | "device" | "account" | "ready">("boot");
@@ -139,6 +257,10 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
   const [account, setAccount] = useState<Ps5Account | null>(() => readAccount());
   const [owned, setOwned] = useState<string[]>(() => readSet(OWNED_KEY, []));
   const [recent, setRecent] = useState<string[]>(() => readSet(RECENT_KEY, []));
+  const [favs, setFavs] = useState<string[]>(() => readSet(FAVORITES_KEY, []));
+  const [favOnly, setFavOnly] = useState(false);
+  const [theme, setTheme] = useState<string>(() => readTheme());
+  const [sound, setSound] = useState(() => getAudioSettings());
   const [playing, setPlaying] = useState<Ps5Game | null>(null);
   const [sessionSec, setSessionSec] = useState(0);
   const [query, setQuery] = useState("");
@@ -149,34 +271,61 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
   const [storeSelection, setStoreSelection] = useState<Ps5Game | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<Ps5Game | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [gridCount, setGridCount] = useState(40);
-  const [hoverBg, setHoverBg] = useState<string | null>(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const [settingsTab, setSettingsTab] = useState<"profile" | "sound" | "theme" | "library">("profile");
+  const [powerMenu, setPowerMenu] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [controlOpen, setControlOpen] = useState(false);
+  const [introOpen, setIntroOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const [rowX, setRowX] = useState(0);
+  const [titleLeft, setTitleLeft] = useState(128);
   const trackRef = useRef<HTMLDivElement | null>(null);
-  const driftRef = useRef({ paused: false, dir: 1 });
-  const pointerInRef = useRef(false);
-  const resumeTimerRef = useRef<number | null>(null);
+  const wheelLockRef = useRef(0);
+  const [viewportRef, scale] = useConsoleScale(stage === "ready");
+  const clock = useClock();
 
   const ownedSet = useMemo(() => new Set(owned), [owned]);
+  const favSet = useMemo(() => new Set(favs), [favs]);
+
+  // Reference look: swap the accent + soft accent CSS variables on theme change.
+  useEffect(() => {
+    const t = THEMES.find((x) => x.id === theme) ?? THEMES[0];
+    const root = document.documentElement;
+    root.style.setProperty("--vs-accent", t.accent);
+    root.style.setProperty("--vs-accent-soft", t.soft);
+    try { localStorage.setItem(THEME_KEY, theme); } catch { /* ignore */ }
+  }, [theme]);
+
+  useEffect(() => subscribeAudio(() => setSound(getAudioSettings())), []);
+
+  // Sound engine: unlock on the first real interaction, run ambient music on the console.
+  useEffect(() => {
+    if (stage !== "ready") return;
+    bindAudioVisibility();
+    const onFirst = () => unlockAudio();
+    window.addEventListener("pointerdown", onFirst);
+    window.addEventListener("keydown", onFirst);
+    return () => {
+      window.removeEventListener("pointerdown", onFirst);
+      window.removeEventListener("keydown", onFirst);
+      stopMusic();
+    };
+  }, [stage]);
+
+  const toggleFav = useCallback((id: string) => {
+    sfx("select");
+    setFavs((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      writeArray(FAVORITES_KEY, next);
+      return next;
+    });
+  }, []);
 
   const collected = useMemo(() => {
     const out: Ps5Game[] = [];
     for (const g of PS5_GAMES) if (ownedSet.has(g.id)) out.push(g);
     return out;
   }, [ownedSet]);
-
-  const installedGames = useMemo(() => {
-    const out: Ps5Game[] = [];
-    const seen = new Set<string>();
-    for (const id of [...owned].reverse()) {
-      if (seen.has(id)) continue;
-      seen.add(id);
-      const game = PS5_GAMES.find((item) => item.id === id);
-      if (game) out.push(game);
-      if (out.length >= 60) break;
-    }
-    return out;
-  }, [owned]);
 
   const recentGames = useMemo(() => {
     const out: Ps5Game[] = [];
@@ -188,27 +337,14 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
     return out;
   }, [recent]);
 
-  const homeGames = useMemo(() => {
-    const seen = new Set<string>();
-    const out: Ps5Game[] = [];
-    for (const game of [...recentGames, ...installedGames]) {
-      if (seen.has(game.id)) continue;
-      seen.add(game.id);
-      out.push(game);
-    }
-    return out;
-  }, [recentGames, installedGames]);
+  const homeGames = useMemo(() => PS5_GAMES, []);
 
   const homeMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? homeGames.filter((g) => g.name.toLowerCase().includes(q)) : homeGames;
-  }, [homeGames, query]);
+    const base = q ? homeGames.filter((g) => g.name.toLowerCase().includes(q)) : homeGames;
+    return favOnly ? base.filter((g) => favSet.has(g.id)) : base;
+  }, [homeGames, query, favOnly, favSet]);
 
-  const storeGames = useMemo(() => PS5_GAMES.filter((game) => !ownedSet.has(game.id)), [ownedSet]);
-  const storeMatches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q ? storeGames.filter((game) => game.name.toLowerCase().includes(q)) : storeGames;
-  }, [query, storeGames]);
   const mediaMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q ? MEDIA_APPS.filter((app) => `${app.name} ${app.publisher}`.toLowerCase().includes(q)) : MEDIA_APPS;
@@ -216,7 +352,17 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
   const homeHero = homeMatches.find((game) => game.id === selectedHomeId) ?? homeMatches[0] ?? null;
   const selectedMedia = MEDIA_APPS.find((app) => app.id === selectedMediaId) ?? MEDIA_APPS[0];
 
+  const isMedia = tab === "media";
+  const activeList = useMemo(
+    () => (isMedia
+      ? mediaMatches.map((app) => ({ id: app.id, name: app.name, cover: app.icon }))
+      : homeMatches.map((game) => ({ id: game.id, name: game.name, cover: game.cover }))),
+    [isMedia, mediaMatches, homeMatches],
+  );
+  const selectedCarouselId = isMedia ? selectedMediaId : selectedHomeId;
+
   const install = useCallback((id: string) => {
+    sfx("select");
     setOwned((prev) => {
       if (prev.includes(id)) return prev;
       const next = [...prev, id];
@@ -230,6 +376,7 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
   }, []);
 
   const launch = useCallback((g: Ps5Game) => {
+    sfx("select");
     setSelectedHomeId(g.id);
     setRecent((prev) => {
       const next = [g.id, ...prev.filter((x) => x !== g.id)];
@@ -247,6 +394,7 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
   }, []);
 
   const createDesktopShortcut = useCallback((game: Ps5Game) => {
+    sfx("select");
     window.dispatchEvent(new CustomEvent("vertex-ps5-create-shortcut", { detail: { id: game.id, name: game.name, cover: game.cover } }));
     setStoreSelection(null);
     setToast(`${game.name} shortcut added to desktop`);
@@ -254,6 +402,7 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
   }, []);
 
   const uninstall = useCallback((game: Ps5Game) => {
+    sfx("back");
     setOwned((prev) => {
       const next = prev.filter((id) => id !== game.id);
       writeArray(OWNED_KEY, next);
@@ -270,7 +419,6 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
     setUninstallTarget(null);
     setToast(`${game.name} uninstalled from Home`);
     window.setTimeout(() => setToast(null), 2400);
-    // do NOT reload the whole page
   }, [playing]);
 
   const updateAccount = useCallback((next: Ps5Account) => {
@@ -278,72 +426,43 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
     setAccount(next);
   }, []);
 
-  const clearResumeTimer = useCallback(() => {
-    if (resumeTimerRef.current !== null) {
-      window.clearTimeout(resumeTimerRef.current);
-      resumeTimerRef.current = null;
-    }
+  const openSettings = useCallback((tabName: "profile" | "sound" | "theme" | "library") => {
+    sfx("controlOpen");
+    setSettingsTab(tabName);
+    setSettingsOpen(true);
   }, []);
 
-  // Freeze the slow auto-drift while the user is pointing at the row or just scrolled it.
-  const holdDrift = useCallback(() => {
-    pointerInRef.current = true;
-    clearResumeTimer();
-    driftRef.current.paused = true;
-  }, [clearResumeTimer]);
+  const centerCarousel = useCallback((id: string) => {
+    const idx = activeList.findIndex((item) => item.id === id);
+    if (idx < 0) return;
+    // Pin the selected tile to the carousel's left edge (tile 74px + 7px gap = 81px pitch),
+    // computed from the index so the animating previous tile can't skew the measurement.
+    setRowX(-(idx * 81));
+  }, [activeList]);
 
-  // Nudge the auto-drift back on a moment after the pointer leaves or a key ends.
-  const releaseDrift = useCallback(() => {
-    pointerInRef.current = false;
-    clearResumeTimer();
-    resumeTimerRef.current = window.setTimeout(() => {
-      resumeTimerRef.current = null;
-      if (pointerInRef.current) return;
-      driftRef.current.paused = false;
-    }, 1400);
-  }, [clearResumeTimer]);
-
-  const centerHomeGame = useCallback((id: string) => {
-    const el = trackRef.current;
-    if (!el) return;
-    const node = el.querySelector<HTMLElement>(`[data-ps5-game="${id}"]`);
-    if (!node) return;
-    const left = node.offsetLeft;
-    const width = node.offsetWidth;
-    const view = el.clientWidth;
-    const max = Math.max(0, el.scrollWidth - view);
-    let target = el.scrollLeft;
-    if (left < el.scrollLeft) target = left - 20;
-    else if (left + width > el.scrollLeft + view) target = left + width - view + 20;
-    target = Math.max(0, Math.min(max, target));
-    if (Math.abs(target - el.scrollLeft) > 1) el.scrollTo({ left: target, behavior: "smooth" });
-  }, []);
-
-  const stepHome = useCallback((delta: number) => {
-    if (!homeMatches.length) return;
-    const current = homeMatches.findIndex((game) => game.id === selectedHomeId);
+  const stepCarousel = useCallback((delta: number) => {
+    if (!activeList.length) return;
+    sfx("navigate");
+    const current = activeList.findIndex((item) => item.id === selectedCarouselId);
     const nextIndex = current < 0
-      ? (delta > 0 ? 0 : homeMatches.length - 1)
-      : Math.max(0, Math.min(homeMatches.length - 1, current + delta));
-    const next = homeMatches[nextIndex];
+      ? (delta > 0 ? 0 : activeList.length - 1)
+      : Math.max(0, Math.min(activeList.length - 1, current + delta));
+    const next = activeList[nextIndex];
     if (!next) return;
-    setSelectedHomeId(next.id);
-    holdDrift();
-    releaseDrift();
-    window.requestAnimationFrame(() => centerHomeGame(next.id));
-  }, [homeMatches, selectedHomeId, centerHomeGame, holdDrift, releaseDrift]);
+    if (isMedia) setSelectedMediaId(next.id);
+    else setSelectedHomeId(next.id);
+    window.requestAnimationFrame(() => centerCarousel(next.id));
+  }, [activeList, selectedCarouselId, isMedia, centerCarousel]);
 
-  const jumpHome = useCallback((edge: "first" | "last") => {
-    if (!homeMatches.length) return;
-    const next = edge === "first" ? homeMatches[0] : homeMatches[homeMatches.length - 1];
+  const jumpCarousel = useCallback((edge: "first" | "last") => {
+    if (!activeList.length) return;
+    sfx("navigate");
+    const next = edge === "first" ? activeList[0] : activeList[activeList.length - 1];
     if (!next) return;
-    setSelectedHomeId(next.id);
-    holdDrift();
-    releaseDrift();
-    window.requestAnimationFrame(() => centerHomeGame(next.id));
-  }, [homeMatches, centerHomeGame, holdDrift, releaseDrift]);
-
-
+    if (isMedia) setSelectedMediaId(next.id);
+    else setSelectedHomeId(next.id);
+    window.requestAnimationFrame(() => centerCarousel(next.id));
+  }, [activeList, isMedia, centerCarousel]);
 
   useEffect(() => {
     if (!playing) return;
@@ -358,7 +477,7 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
   useEffect(() => {
     if (!playing) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPlaying(null);
+      if (e.key === "Escape") { sfx("back"); setPlaying(null); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -386,84 +505,56 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
   }, [stage, launch]);
 
   useEffect(() => {
-    if (tab !== "featured" || !sentinelRef.current) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) setGridCount((c) => Math.min(PS5_TOTAL, c + 40));
-      },
-      { rootMargin: "600px" },
-    );
-    io.observe(sentinelRef.current);
-    return () => io.disconnect();
-  }, [tab, gridCount]);
+    setPage(0);
+  }, [tab, query, libraryOpen]);
 
+  // Keep the selected game's name pinned in the notch beside its tile.
   useEffect(() => {
-    setGridCount(40);
-  }, [tab, query]);
+    const idx = activeList.findIndex((item) => item.id === selectedCarouselId);
+    if (idx < 0) { setTitleLeft(128); return; }
+    setTitleLeft(rowX + 128 + idx * 81);
+  }, [selectedCarouselId, rowX, activeList]);
 
-  // Slow, endless drift across the installed-games row. Pure scrollLeft writes,
-  // so nothing re-renders and nothing reloads while it runs.
+  // Reset the carousel offset whenever the tab changes.
   useEffect(() => {
-    if (stage !== "ready" || tab !== "home") return;
-    if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    let frame = 0;
-    let last = performance.now();
-    const step = (now: number) => {
-      frame = window.requestAnimationFrame(step);
-      const delta = Math.min(now - last, 64);
-      last = now;
-      const el = trackRef.current;
-      if (!el || driftRef.current.paused) return;
-      const max = el.scrollWidth - el.clientWidth;
-      if (max <= 2) return;
-      let next = el.scrollLeft + 0.024 * delta * driftRef.current.dir;
-      if (next >= max) { next = max; driftRef.current.dir = -1; }
-      else if (next <= 0) { next = 0; driftRef.current.dir = 1; }
-      el.scrollLeft = next;
-    };
-    frame = window.requestAnimationFrame(step);
-    return () => { window.cancelAnimationFrame(frame); clearResumeTimer(); };
-  }, [stage, tab, homeMatches.length, clearResumeTimer]);
+    setRowX(0);
+  }, [tab]);
 
-  // Mouse wheel / trackpad scrolls the row sideways instead of the page.
+  // Mouse wheel / trackpad scrolls the carousel one tile at a time.
   useEffect(() => {
-    const el = trackRef.current;
+    if (stage !== "ready") return;
+    const el = trackRef.current?.parentElement;
     if (!el) return;
     const onWheel = (event: WheelEvent) => {
-      if (event.ctrlKey) return;
-      const max = el.scrollWidth - el.clientWidth;
-      if (max <= 2) return;
+      const now = performance.now();
+      if (now - wheelLockRef.current < 220) return;
       const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-      if (!delta) return;
-      if (el.scrollLeft <= 0.5 && delta < 0) return;
-      if (el.scrollLeft >= max - 0.5 && delta > 0) return;
+      if (Math.abs(delta) < 2) return;
       event.preventDefault();
-      holdDrift();
-      releaseDrift();
-      el.scrollLeft += delta;
+      wheelLockRef.current = now;
+      stepCarousel(delta > 0 ? 1 : -1);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [tab, stage, homeMatches.length, holdDrift, releaseDrift]);
+  }, [stage, stepCarousel, activeList.length]);
 
-  // Arrow keys / Home / End browse the row.
+  // Arrow keys / Home / End browse the carousel.
   useEffect(() => {
-    if (stage !== "ready" || tab !== "home") return;
+    if (stage !== "ready") return;
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
       const node = event.target as HTMLElement | null;
       const tag = node?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || node?.isContentEditable) return;
-      if (playing || storeSelection || uninstallTarget || settingsOpen || !homeMatches.length) return;
-      if (event.key === "ArrowRight") { event.preventDefault(); stepHome(1); }
-      else if (event.key === "ArrowLeft") { event.preventDefault(); stepHome(-1); }
-      else if (event.key === "Home") { event.preventDefault(); jumpHome("first"); }
-      else if (event.key === "End") { event.preventDefault(); jumpHome("last"); }
+      if (playing || storeSelection || uninstallTarget || settingsOpen || powerMenu || mediaApp || libraryOpen || controlOpen || !activeList.length) return;
+      if (event.key === "ArrowRight") { event.preventDefault(); stepCarousel(1); }
+      else if (event.key === "ArrowLeft") { event.preventDefault(); stepCarousel(-1); }
+      else if (event.key === "Home") { event.preventDefault(); jumpCarousel("first"); }
+      else if (event.key === "End") { event.preventDefault(); jumpCarousel("last"); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [stage, tab, playing, storeSelection, uninstallTarget, settingsOpen, homeMatches.length, stepHome, jumpHome]);
-
+  }, [stage, tab, playing, storeSelection, uninstallTarget, settingsOpen, powerMenu, mediaApp, libraryOpen, controlOpen, activeList.length, stepCarousel, jumpCarousel]);
 
   if (stage === "boot") {
     return (
@@ -497,7 +588,6 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
     );
   }
 
-
   if (stage === "account") {
     return (
       <div className="ps5-surface">
@@ -506,266 +596,618 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
     );
   }
 
+  const activeItem = activeList.find((item) => item.id === selectedCarouselId) ?? activeList[0] ?? null;
+  const activeIndex = Math.max(0, activeList.findIndex((item) => item.id === selectedCarouselId));
+  const overlaysOpen = settingsOpen || playing || storeSelection || uninstallTarget || powerMenu || mediaApp || libraryOpen || controlOpen || introOpen;
+  const artColor = artColorFor(activeItem?.id ?? "vertex");
+
   return (
-    <div className="ps5-surface" onMouseLeave={() => setHoverBg(null)}>
+    <main
+      ref={viewportRef}
+      className="vs-console viewport"
+      data-input="pointer"
+      onPointerMove={(e) => { e.currentTarget.dataset.input = "pointer"; }}
+      onKeyDown={(e) => { e.currentTarget.dataset.input = "keyboard"; }}
+    >
+      <div className={`hero-stack${overlaysOpen ? " is-obscured" : ""}`} aria-hidden="true">
+        <div className={`hero-background catalog-hero${isMedia ? " media-hero" : ""}${activeItem ? " current-art" : ""}`} style={{ "--art-color": artColor } as CSSProperties}>
+          {activeItem ? <img className="catalog-hero-art" src={activeItem.cover} alt="" draggable={false} /> : null}
+        </div>
+        <div className="hero-shade" />
+      </div>
+      <div className={`vs-console-dim${overlaysOpen ? " on" : ""}`} aria-hidden="true" />
       <div
-        className={`ps5-ambient ${hoverBg ? "on" : ""}`}
-        style={hoverBg ? { backgroundImage: `url(${hoverBg})` } : undefined}
-      />
-      <div className="ps5-shell">
-        <div className="ps5-main">
-          <header className="ps5-top">
-            <span className="ps5-top-lead" />
-            <nav className="ps5-system-nav" aria-label="Console menu">
-              <button type="button" className={`ps5-nav-item ${tab === "home" ? "active" : ""}`} onClick={() => setTab("home")}><Home size={16} /> Home</button>
-              <button type="button" className={`ps5-nav-item ${tab === "featured" ? "active" : ""}`} onClick={() => setTab("featured")}><Sparkles size={16} /> Store</button>
-              <button type="button" className={`ps5-nav-item ${tab === "media" ? "active" : ""}`} onClick={() => { setTab("media"); setMediaApp(null); }}><PanelsTopLeft size={16} /> Media</button>
+        className={`console-canvas${playing ? " in-game-menu" : ""}`}
+        style={{ transform: `translate(-50%,-50%) scale(${scale})` }}
+        onPointerMove={(e) => { e.currentTarget.dataset.input = "pointer"; }}
+        onKeyDown={(e) => { e.currentTarget.dataset.input = "keyboard"; }}
+      >
+        <div className={`home-content${overlaysOpen ? " is-obscured" : ""}`}>
+          <header>
+            <nav aria-label="Main navigation">
+              <button type="button" className={`nav-tab${tab === "home" ? " active" : ""}`} aria-pressed={tab === "home"} onClick={() => { if (tab !== "home") sfx("navigate"); setTab("home"); }}>Games</button>
+              <button type="button" className={`nav-tab${tab === "media" ? " active" : ""}`} aria-pressed={tab === "media"} onClick={() => { if (tab !== "media") sfx("navigate"); setTab("media"); }}>Media</button>
             </nav>
-            <div className="ps5-top-actions">
-              <button
-                type="button"
-                className={`ps5-profile-chip ${settingsOpen ? "on" : ""}`}
-                onClick={() => setSettingsOpen(true)}
-                title="Edit your console profile"
-                aria-label="Edit your console profile"
-              >
-                <span className="ps5-profile-chip-avatar" style={avatarVisual(account)}>
-                  {(account?.displayName ?? "P").slice(0, 1).toUpperCase()}
+            <div className="system-actions">
+              <button type="button" className="icon-button" aria-label="Search" onClick={() => { sfx("controlOpen"); setLibraryOpen(true); }}>
+                <Search /><span className="tooltip">Search</span>
+              </button>
+              <button type="button" className="icon-button" aria-label="Settings" onClick={() => openSettings("sound")}>
+                <Settings /><span className="tooltip">Settings</span>
+              </button>
+              <button type="button" className="icon-button profile-button" aria-label="Profile" onClick={() => openSettings("profile")}>
+                <span className="profile-indicator status-online">
+                  <span className="avatar-art" style={avatarVisual(account)}>{(account?.displayName ?? "V").slice(0, 1).toUpperCase()}</span>
+                  <span className="online" />
+                  <span className="tooltip">Profile</span>
                 </span>
-                <span className="ps5-profile-chip-name">{account?.displayName ?? "Profile"}</span>
               </button>
-              <button type="button" className={`ps5-gear ${settingsOpen ? "on" : ""}`} onClick={() => setSettingsOpen((open) => !open)} title="Settings" aria-label="Settings" aria-pressed={settingsOpen}>
-                <Settings size={17} />
-              </button>
+              <time className="clock">{clock}</time>
             </div>
           </header>
 
-
-      <div className="ps5-body">
-        {tab === "home" && (
-          <div className="ps5-home ps5-console-home">
-            {homeHero ? (
-              <section className="ps5-hero ps5-console-hero">
-                <div className="ps5-hero-img" style={{ backgroundImage: 'url(' + homeHero.cover + ')' }} />
-                <div className="ps5-hero-fade" />
-                <div className="ps5-hero-content">
-                  <div className="ps5-hero-tag">YOUR INSTALLED GAMES</div>
-                  <h1 className="ps5-hero-title">{homeHero.name}</h1>
-                  <p className="ps5-hero-sub">HTML5 game · In your collection</p>
-                  <div className="ps5-hero-actions">
-                    <button type="button" className="ps5-play-btn" onClick={() => launch(homeHero)}><Play size={15} fill="currentColor" /> Play</button>
-                    <button
-                      type="button"
-                      className="ps5-hero-uninstall"
-                      onClick={() => setUninstallTarget(homeHero)}
-                      onMouseDown={(event) => event.preventDefault()}
-                    >
-                      <Trash2 size={15} /> Uninstall
-                    </button>
-                  </div>
-                </div>
-              </section>
-            ) : (
-              <section className="ps5-home-empty">
-                <div className="ps5-home-kicker">WELCOME BACK, {account?.displayName ?? "PLAYER"}</div>
-                <h1>Your games will show up here</h1>
-                <p>Pick a game in the Store and install it to your Home screen.</p>
-                <button type="button" className="ps5-play-btn" onClick={() => setTab("featured")}>Browse Store <ChevronRight size={15} /></button>
-              </section>
-            )}
-            <section className="ps5-row ps5-installed-row">
-              <div className="ps5-row-head">
-                <div><span className="ps5-home-kicker">YOUR COLLECTION</span><h2 className="ps5-row-title">Games</h2></div>
-                <div className="ps5-head-tools">
-                  <Ps5SearchField value={query} onChange={setQuery} placeholder="Search Home" />
-                  <span className="ps5-row-count">{homeMatches.length} installed</span>
-                </div>
-              </div>
-              {homeMatches.length ? (
-                <div
-                  ref={trackRef}
-                  className="ps5-track ps5-installed-track"
-                  tabIndex={0}
-                  aria-label="Installed games — use the arrow keys to browse"
-                  onMouseEnter={holdDrift}
-                  onMouseLeave={releaseDrift}
-                >
-                  {homeMatches.map((game) => (
-                    <div
-                      key={game.id}
-                      className="ps5-installed-cell"
-                      data-ps5-game={game.id}
-                    >
-                      <Ps5Card game={game} selected={game.id === homeHero?.id} onHover={setHoverBg} onSelect={() => setSelectedHomeId(game.id)} />
-                    </div>
+          {activeList.length ? (
+            <>
+              <section className="carousel" aria-label={isMedia ? "Media" : "Games"}>
+                <div className="tile-row" ref={trackRef} style={{ transform: `translateX(${rowX}px)` }}>
+                  {activeList.map((item) => (
+                    <VsTile
+                      key={item.id}
+                      game={item}
+                      selected={item.id === activeItem?.id}
+                      onSelect={() => { if (isMedia) setSelectedMediaId(item.id); else setSelectedHomeId(item.id); centerCarousel(item.id); }}
+                      onHover={() => { if (isMedia) setSelectedMediaId(item.id); else setSelectedHomeId(item.id); }}
+                    />
                   ))}
                 </div>
-              ) : query ? (
-                <div className="ps5-empty"><p>No installed games match “{query}”.</p></div>
-              ) : null}
-            </section>
-          </div>
-        )}
-
-        {tab === "featured" && (
-          <div className="ps5-page ps5-store-page">
-            <div className="ps5-page-head ps5-store-heading">
-              <div><span className="ps5-home-kicker">DISCOVER SOMETHING NEW</span><h1>PlayStation Store</h1></div>
-              <div className="ps5-store-tools">
-                <Ps5SearchField value={query} onChange={setQuery} placeholder="Search Store" />
-                <span className="ps5-page-meta">{storeMatches.length} games</span>
-              </div>
-            </div>
-            <p className="ps5-store-description">Choose a game to install it on Home or add a shortcut to your desktop.</p>
-            {storeMatches.length ? (
-              <div className="ps5-grid ps5-store-grid">
-                {storeMatches.slice(0, gridCount).map((game) => (
-                  <Ps5StoreCard key={game.id} game={game} onSelect={() => setStoreSelection(game)} onHover={setHoverBg} />
-                ))}
-              </div>
-            ) : (
-              <div className="ps5-empty"><p>{query ? 'No games match “' + query + '”.' : "You have installed every game in the Store."}</p></div>
-            )}
-            {!query && storeMatches.length > gridCount ? <div ref={sentinelRef} className="ps5-store-sentinel" /> : null}
-          </div>
-        )}
-
-        {tab === "media" && (
-          <div className="ps5-page ps5-media-page">
-            {mediaApp ? (
-              <section className="ps5-media-open">
-                <div className="ps5-media-open-head">
-                  <button type="button" className="ps5-back-link" onClick={() => setMediaApp(null)}><ChevronRight size={15} /> Media</button>
-                  <div><span>{mediaApp.publisher}</span><h1>{mediaApp.name}</h1></div>
-                  {mediaApp.external ? (
-                    <a className="ps5-media-external" href={mediaApp.external} target="_blank" rel="noreferrer">Open in new tab <ChevronRight size={14} /></a>
-                  ) : null}
-                </div>
-                <div className="ps5-media-stage">
-                  {mediaApp.kind === "frame" && mediaApp.src ? (
-                    <iframe className="ps5-media-embed" src={mediaApp.src} title={mediaApp.name} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" allowFullScreen />
-                  ) : (
-                    <MediaAppStage app={mediaApp} surfaces={surfaces} onExit={() => setMediaApp(null)} />
-                  )}
-                </div>
+                <p className="selected-title" style={{ left: titleLeft, width: 992 }}>{activeItem?.name}</p>
+                <span className="carousel-position">{activeIndex + 1} / {activeList.length}</span>
               </section>
-            ) : (
-              <>
-                <section
-                  className="ps5-media-feature"
-                  style={{
-                    backgroundImage: selectedMedia.kind === "frame"
-                      ? 'linear-gradient(90deg, rgba(4,8,18,.94), rgba(4,8,18,.53) 58%, rgba(4,8,18,.16)), url(' + selectedMedia.cover + ')'
-                      : 'linear-gradient(115deg, rgba(12,22,44,.96), rgba(6,11,23,.86) 62%, rgba(14,26,52,.7))',
-                  }}
-                >
-                  <div className="ps5-media-feature-copy">
-                    <span className="ps5-home-kicker">MEDIA · {selectedMedia.publisher}</span>
-                    <span className="ps5-media-feature-icon"><img src={selectedMedia.icon} alt="" /></span>
-                    <h1>{selectedMedia.name}</h1>
-                    <p>{selectedMedia.description}</p>
-                    <button type="button" className="ps5-play-btn" onClick={() => setMediaApp(selectedMedia)}><Play size={15} fill="currentColor" /> Open {selectedMedia.name}</button>
+              {isMedia ? (
+                <section className="game-info media-info" aria-label="Selected app">
+                  <div className="game-brand">
+                    <div className="text-logo"><h1 key={activeItem?.id}>{activeItem?.name}</h1></div>
+                  </div>
+                  <p className="tagline">By {selectedMedia.publisher}</p>
+                  <div className="primary-actions">
+                    <button type="button" className="play-button" onClick={() => { sfx("select"); setMediaApp(selectedMedia); }}>Open</button>
                   </div>
                 </section>
-                <div className="ps5-media-content">
-                  <section className="ps5-row ps5-media-apps">
-                    <div className="ps5-row-head">
-                      <div><span className="ps5-home-kicker">YOUR APPS</span><h2 className="ps5-row-title">Media</h2></div>
-                      <div className="ps5-head-tools">
-                        <Ps5SearchField value={query} onChange={setQuery} placeholder="Search Media" />
-                        <span className="ps5-row-count">{mediaMatches.length} apps</span>
-                      </div>
-                    </div>
-                    <div className="ps5-track ps5-media-track">
-                      {mediaMatches.map((app) => (
-                        <button type="button" key={app.id} className={'ps5-media-card ' + (selectedMediaId === app.id ? "selected" : "")} onClick={() => setSelectedMediaId(app.id)} onMouseEnter={() => { setSelectedMediaId(app.id); setHoverBg(app.kind === "frame" ? app.cover : null); }}>
-                          <span className="ps5-media-icon"><img src={app.icon} alt="" loading="lazy" /></span>
-                          <span className="ps5-media-card-name">{app.name}</span>
-                          <span className="ps5-media-card-publisher">{app.publisher}</span>
-                          <span className="ps5-media-open-label">Open <ChevronRight size={13} /></span>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-      </div>
-      </div>
-      {settingsOpen ? (
-        <Ps5SettingsPanel
-          account={account}
-          deviceMode={deviceMode}
-          installedCount={collected.length}
-          recentCount={recentGames.length}
-          onDeviceMode={setDeviceMode}
-          onUpdate={updateAccount}
-          onClose={() => setSettingsOpen(false)}
-        />
-      ) : null}
-      {uninstallTarget ? (
-        <div className="ps5-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setUninstallTarget(null); }}>
-          <section className="ps5-game-dialog ps5-uninstall-dialog" role="dialog" aria-modal="true" aria-labelledby="ps5-uninstall-title">
-            <button type="button" className="ps5-dialog-close" onClick={() => setUninstallTarget(null)} aria-label="Close"><X size={18} /></button>
-            <img className="ps5-dialog-cover" src={uninstallTarget.cover} alt="" />
-            <div className="ps5-dialog-copy">
-              <span className="ps5-home-kicker">UNINSTALL</span>
-              <h2 id="ps5-uninstall-title">{uninstallTarget.name}</h2>
-              <p>This removes the game from your console Home screen and deletes its desktop shortcut. You can download it again from the Store at any time.</p>
-              <div className="ps5-dialog-actions">
-                <button type="button" className="ps5-dialog-secondary" onClick={() => setUninstallTarget(null)}>Keep installed</button>
-                <button
-                  type="button"
-                  className="ps5-dialog-danger"
-                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                  onClick={() => { if (uninstallTarget) uninstall(uninstallTarget); }}
-                ><Trash2 size={15} /> Uninstall</button>
+              ) : (
+                <section className="game-info" aria-label="Selected game">
+                  <div className="game-brand">
+                    <div className="text-logo"><h1 key={activeItem?.id}>{activeItem?.name}</h1></div>
+                  </div>
+                  <p className="tagline">HTML5 game · In your collection</p>
+                  <div className="primary-actions">
+                    <button type="button" className="play-button" onClick={() => homeHero && launch(homeHero)}>Play</button>
+                    <button type="button" className="more-button" aria-label="Game options" onClick={() => { sfx("optionsOpen"); if (homeHero) setStoreSelection(homeHero); }}><MoreHorizontal /></button>
+                  </div>
+                </section>
+              )}
+            </>
+          ) : (
+            <section className="game-info">
+              <div className="game-brand">
+                <div className="text-logo"><h1>{query ? "Nothing here" : "Welcome to Vertex Station"}</h1></div>
               </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
-      {storeSelection ? (
-        <div className="ps5-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setStoreSelection(null); }}>
-          <section className="ps5-game-dialog" role="dialog" aria-modal="true" aria-labelledby="ps5-game-dialog-title">
-            <button type="button" className="ps5-dialog-close" onClick={() => setStoreSelection(null)} aria-label="Close"><X size={18} /></button>
-            <img className="ps5-dialog-cover" src={storeSelection.cover} alt="" />
-            <div className="ps5-dialog-copy">
-              <span className="ps5-home-kicker">FREE HTML5 GAME</span>
-              <h2 id="ps5-game-dialog-title">{storeSelection.name}</h2>
-              <p>Choose where to add this game. Installed games appear together on Home.</p>
-              <div className="ps5-dialog-actions">
-                <button type="button" className="ps5-play-btn" onClick={() => { install(storeSelection.id); setStoreSelection(null); }}><Plus size={15} /> Download to Home</button>
-                <button type="button" className="ps5-dialog-secondary" onClick={() => createDesktopShortcut(storeSelection)}><PanelsTopLeft size={15} /> Create desktop shortcut</button>
+              <p className="tagline">{query ? `No games match “${query}”.` : "Your games. Your station. Open the Game Library to install something new."}</p>
+              <div className="primary-actions">
+                <button type="button" className="play-button" onClick={() => { sfx("navigate"); setLibraryOpen(true); }}>Open Library</button>
               </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
-      {toast ? <div className="ps5-toast"><Check size={15} /> {toast}</div> : null}
+            </section>
+          )}
 
-      {playing ? (
-        <div className="ps5-session">
-          <div className="ps5-session-head">
-            <div>
-              <div className="ps5-session-badge">NOW PLAYING</div>
-              <div className="ps5-session-title">{playing.name}</div>
+          {isMedia ? null : (
+            <button type="button" className="library-trigger" onClick={() => { sfx("controlOpen"); setLibraryOpen(true); }}>
+              <PanelsTopLeft /><span>Game Library</span><small>{PS5_TOTAL} games</small>
+            </button>
+          )}
+          <button type="button" className="control-trigger" aria-label="Open Control Center" onClick={() => { sfx("controlOpen"); setControlOpen(true); }}>
+            <span className="ps-mark" style={{ filter: "none", color: "#438cff", fontWeight: 700, fontSize: 13 }}>VS</span>
+            <span>Control Center</span><kbd>Home</kbd>
+          </button>
+          <NowPlayingCard />
+        </div>
+
+        {settingsOpen ? (
+          <Ps5SettingsPanel
+            account={account}
+            deviceMode={deviceMode}
+            installedCount={collected.length}
+            recentCount={recentGames.length}
+            sound={sound}
+            theme={theme}
+            favOnly={favOnly}
+            onFavOnly={setFavOnly}
+            tab={settingsTab}
+            onTab={setSettingsTab}
+            onSound={setAudioSettings}
+            onTheme={setTheme}
+            onDeviceMode={setDeviceMode}
+            onUpdate={updateAccount}
+            onPower={() => { sfx("controlClose"); setSettingsOpen(false); setPowerMenu(true); }}
+            onClose={() => { sfx("controlClose"); setSettingsOpen(false); }}
+          />
+        ) : null}
+
+        {uninstallTarget ? (
+          <div className="modal-root">
+            <div className="panel-shade" onMouseDown={(event) => { if (event.target === event.currentTarget) { sfx("dialogClose"); setUninstallTarget(null); } }}>
+              <section className="overlay-panel" role="dialog" aria-modal="true" aria-labelledby="vs-uninstall-title">
+                <div className="panel-header">
+                  <h2 id="vs-uninstall-title">Uninstall {uninstallTarget.name}</h2>
+                  <button type="button" className="icon-button close-button" onClick={() => { sfx("dialogClose"); setUninstallTarget(null); }} aria-label="Close"><X size={22} /></button>
+                </div>
+                <img className="panel-art" src={uninstallTarget.cover} alt="" />
+                <p className="muted-copy">This removes the game from your console Home screen and deletes its desktop shortcut. You can download it again from the Game Library any time.</p>
+                <div className="form-actions">
+                  <button type="button" className="secondary-button" onClick={() => { sfx("dialogClose"); setUninstallTarget(null); }}>Keep installed</button>
+                  <button
+                    type="button"
+                    className="solid-button"
+                    onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                    onClick={() => { if (uninstallTarget) uninstall(uninstallTarget); }}
+                  ><Trash2 size={18} /> Uninstall</button>
+                </div>
+              </section>
             </div>
-            <div className="ps5-session-right">
-              <span className="ps5-session-time">{fmtTime(sessionSec)}</span>
-              <button type="button" className="ps5-close-btn" onClick={() => setPlaying(null)}>
-                <X size={15} /> Close Game
+          </div>
+        ) : null}
+
+        {storeSelection ? (
+          <GameOptions
+            game={storeSelection}
+            owned={ownedSet.has(storeSelection.id)}
+            fav={favSet.has(storeSelection.id)}
+            onToggleFav={() => toggleFav(storeSelection.id)}
+            onInstall={() => { install(storeSelection.id); setStoreSelection(null); }}
+            onUninstall={() => { const g = storeSelection; setStoreSelection(null); setUninstallTarget(g); }}
+            onShortcut={() => createDesktopShortcut(storeSelection)}
+            onLibrary={() => { setStoreSelection(null); setLibraryOpen(true); }}
+            onLaunch={() => { const g = storeSelection; setStoreSelection(null); launch(g); }}
+            onClose={() => { sfx("dialogClose"); setStoreSelection(null); }}
+          />
+        ) : null}
+
+        {controlOpen ? (
+          <ControlCenter
+            account={account}
+            clock={clock}
+            playing={playing}
+            onSettings={() => { setControlOpen(false); openSettings("sound"); }}
+            onLibrary={() => { setControlOpen(false); setLibraryOpen(true); }}
+            onProfile={() => { setControlOpen(false); openSettings("profile"); }}
+            onPower={() => { sfx("controlClose"); setControlOpen(false); setPowerMenu(true); }}
+            onClose={() => { sfx("controlClose"); setControlOpen(false); }}
+          />
+        ) : null}
+
+        {libraryOpen ? (
+          <LibraryPanel
+            games={PS5_GAMES}
+            query={query}
+            onQuery={setQuery}
+            ownedSet={ownedSet}
+            favSet={favSet}
+            page={page}
+            onPage={setPage}
+            onOpen={(game) => { sfx("dialogOpen"); setStoreSelection(game); }}
+            favOnly={favOnly}
+            onFavOnly={setFavOnly}
+            onClose={() => { sfx("controlClose"); setLibraryOpen(false); setQuery(""); }}
+          />
+        ) : null}
+
+        {toast ? <div className="toast visible" role="status"><Check size={18} /> {toast}</div> : null}
+
+        {playing ? (
+          <VsGamePlayer
+            game={playing}
+            sessionSec={sessionSec}
+            sound={sound}
+            onVolume={(v) => setAudioSettings({ volume: v, muted: false })}
+            onMute={() => { setAudioSettings({ muted: !sound.muted }); sfx(sound.muted ? "controlOpen" : "back"); }}
+            onClose={() => { sfx("back"); setPlaying(null); }}
+          />
+        ) : null}
+
+        {mediaApp ? (
+          <div className="media-app-open">
+            <div className="media-exit-dock">
+              <button type="button" className="media-exit-button" onClick={() => { sfx("back"); setMediaApp(null); }} aria-label="Close media app" title="Close">
+                <X size={22} />
               </button>
             </div>
+            {mediaApp.kind === "frame" && mediaApp.src ? (
+              <iframe className="media-app-frame" src={mediaApp.src} title={mediaApp.name} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" allowFullScreen />
+            ) : (
+              <div className="media-app-stage">
+                <MediaAppStage app={mediaApp} surfaces={surfaces} onExit={() => setMediaApp(null)} />
+              </div>
+            )}
+            <div className="game-exit-dock">
+              <div className="game-dock-zone game-home-zone">
+                <button type="button" className="ps-home-button" onClick={() => { sfx("back"); setMediaApp(null); }} aria-label="Go to console home">
+                  <span className="game-dock-icon ps-home-mark">VS</span>
+                  <span style={{ fontSize: 12 }}>Home</span>
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="ps5-session-frame">
-            <GameFrame key={playing.id} game={playing} />
+        ) : null}
+
+        {powerMenu ? <PowerMenu account={account} onWake={() => { sfx("controlOpen"); setPowerMenu(false); }} /> : null}
+
+        {introOpen ? (
+          <WelcomePanel
+            account={account}
+            onClose={() => {
+              sfx("dialogClose");
+              try { localStorage.setItem("vertex-ps5-intro", "done"); } catch {}
+              setIntroOpen(false);
+            }}
+          />
+        ) : null}
+      </div>
+    </main>
+  );
+}
+
+function VsTile({ game, selected, onSelect, onHover }: { game: { id: string; name: string; cover: string }; selected: boolean; onSelect: () => void; onHover: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`game-tile${selected ? " selected" : ""}`}
+      data-ps5-game={game.id}
+      onClick={onSelect}
+      onMouseEnter={onHover}
+      aria-label={`Select ${game.name}`}
+      aria-current={selected}
+    >
+      <img className="game-cover" src={game.cover} alt={game.name} loading="lazy" draggable={false} />
+    </button>
+  );
+}
+
+function LibraryPanel({ games, query, onQuery, ownedSet, favSet, page, onPage, onOpen, favOnly, onFavOnly, onClose }: {
+  games: readonly Ps5Game[];
+  query: string;
+  onQuery: (next: string) => void;
+  ownedSet: Set<string>;
+  favSet: Set<string>;
+  page: number;
+  onPage: (next: number) => void;
+  onOpen: (game: Ps5Game) => void;
+  favOnly: boolean;
+  onFavOnly: (next: boolean) => void;
+  onClose: () => void;
+}) {
+  const PAGE_SIZE = 20;
+  const normalized = query.trim().toLowerCase();
+  const filtered = games.filter((game) => {
+    if (favOnly && !favSet.has(game.id)) return false;
+    if (!normalized) return true;
+    return game.name.toLowerCase().includes(normalized);
+  });
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount - 1);
+  const slice = filtered.slice(current * PAGE_SIZE, current * PAGE_SIZE + PAGE_SIZE);
+
+  return (
+    <div className="modal-root">
+      <div className="panel-shade" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+        <section className="overlay-panel wide-panel" role="dialog" aria-modal="true" aria-labelledby="vs-library-title">
+          <div className="panel-header">
+            <h2 id="vs-library-title">Game Library</h2>
+            <button type="button" className="icon-button close-button" onClick={onClose} aria-label="Close library"><X size={24} /></button>
           </div>
+          <div className="library-tools">
+            <Ps5SearchField value={query} onChange={onQuery} placeholder="Search the library" />
+            <button
+              type="button"
+              className={`secondary-button${favOnly ? " on" : ""}`}
+              aria-pressed={favOnly}
+              onClick={() => { onFavOnly(!favOnly); onPage(0); }}
+            ><Star size={18} fill={favOnly ? "currentColor" : "none"} /> Favorites</button>
+          </div>
+          {slice.length ? (
+            <div className="collection-grid">
+              {slice.map((game) => (
+                <button type="button" key={game.id} className="collection-game" onClick={() => onOpen(game)} title={`View ${game.name}`}>
+                  <img className="game-cover" src={game.cover} alt={game.name} loading="lazy" draggable={false} />
+                  <span>{game.name}</span>
+                  <small className="collection-publisher">{ownedSet.has(game.id) ? "Installed" : "In store"}</small>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="muted-copy">{query ? `No games match “${query}”.` : "Nothing to show yet."}</p>
+          )}
+          {pageCount > 1 ? (
+            <div className="collection-pagination">
+              <button type="button" disabled={current <= 0} onClick={() => onPage(current - 1)}>Previous</button>
+              <span>Page {current + 1} of {pageCount}</span>
+              <button type="button" disabled={current >= pageCount - 1} onClick={() => onPage(current + 1)}>Next</button>
+            </div>
+          ) : null}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function downloadGameHtml(game: Ps5Game) {
+  const title = game.name.replace(/[<>&"]/g, "");
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${title}</title>
+<style>html,body{margin:0;height:100%;background:#03050a}iframe{border:0;width:100%;height:100%;display:block}</style>
+</head>
+<body>
+<iframe src="${game.play}" allow="autoplay; fullscreen; gamepad; clipboard-write; encrypted-media" allowfullscreen></iframe>
+</body>
+</html>`;
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${game.id}.html`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function GameOptions({ game, owned, fav, onToggleFav, onInstall, onUninstall, onShortcut, onLibrary, onLaunch, onClose }: {
+  game: Ps5Game;
+  owned: boolean;
+  fav: boolean;
+  onToggleFav: () => void;
+  onInstall: () => void;
+  onUninstall: () => void;
+  onShortcut: () => void;
+  onLibrary: () => void;
+  onLaunch: () => void;
+  onClose: () => void;
+}) {
+  const [downloaded, setDownloaded] = useState(false);
+  const download = () => {
+    sfx("select");
+    downloadGameHtml(game);
+    setDownloaded(true);
+    window.setTimeout(() => setDownloaded(false), 2000);
+  };
+  return (
+    <div className="modal-root">
+      <div className="panel-shade" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+        <section className="overlay-panel" role="dialog" aria-modal="true" aria-labelledby="vs-options-title">
+          <div className="panel-header">
+            <h2 id="vs-options-title">Game options</h2>
+            <button type="button" className="icon-button close-button" onClick={onClose} aria-label="Close"><X size={24} /></button>
+          </div>
+          <div className="options-game">
+            <img className="game-cover options-logo" src={game.cover} alt="" draggable={false} />
+            <div>
+              <h3>{game.name}</h3>
+              <p>{owned ? "Installed on this console" : "Not installed yet"}</p>
+            </div>
+          </div>
+          <div className="options-actions">
+            {owned ? (
+              <button type="button" className="solid-button" onClick={onLaunch}><Play size={19} fill="currentColor" /> Play</button>
+            ) : (
+              <button type="button" className="solid-button" onClick={onInstall}><Plus size={19} /> Install</button>
+            )}
+            <button type="button" className="secondary-button" onClick={download}><Download size={18} /> {downloaded ? "Saved to downloads" : "Download single HTML file"}</button>
+            <button type="button" className="secondary-button" aria-pressed={fav} onClick={onToggleFav}><Star size={18} fill={fav ? "currentColor" : "none"} /> {fav ? "In favorites" : "Add to favorites"}</button>
+            <button type="button" className="secondary-button" onClick={onLibrary}><PanelsTopLeft size={18} /> Game library</button>
+            <button type="button" className="secondary-button" onClick={onShortcut}><Monitor size={18} /> Add desktop shortcut</button>
+            {owned ? (
+              <button type="button" className="secondary-button" onClick={onUninstall}><Trash2 size={18} /> Uninstall</button>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function ControlCenter({ account, clock, playing, onSettings, onLibrary, onProfile, onPower, onClose }: {
+  account: Ps5Account | null;
+  clock: string;
+  playing: Ps5Game | null;
+  onSettings: () => void;
+  onLibrary: () => void;
+  onProfile: () => void;
+  onPower: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="control-center">
+      <time className="clock control-center-clock">{clock}</time>
+      <div className="activity-cards">
+        <button type="button" className="activity-card" onClick={onLibrary}>
+          <span className="activity-art"><Gamepad2 /></span>
+          <span className="kicker">{playing ? "NOW PLAYING" : "YOUR LIBRARY"}</span>
+          <h3>{playing ? playing.name : "Browse games"}</h3>
+          <p>{playing ? "Tap to return to your game." : "Open the library to install something new."}</p>
+        </button>
+        <button type="button" className="activity-card" onClick={onProfile}>
+          <span className="activity-art"><UserPlus /></span>
+          <span className="kicker">PROFILE</span>
+          <h3>{account?.displayName ?? "Vertex Player"}</h3>
+          <p>Manage your account, avatar and console theme.</p>
+        </button>
+        <button type="button" className="activity-card" onClick={onSettings}>
+          <span className="activity-art"><Music /></span>
+          <span className="kicker">SOUND &amp; A/V</span>
+          <h3>Audio settings</h3>
+          <p>Adjust volume, mute and interface sounds.</p>
+        </button>
+      </div>
+      <div className="control-bar">
+        <div className="control-group">
+          <button type="button" className="control-icon" onClick={onSettings} aria-label="Settings"><Settings /><span className="tooltip">Settings</span></button>
+          <button type="button" className="control-icon" onClick={onLibrary} aria-label="Game Library"><PanelsTopLeft /><span className="tooltip">Library</span></button>
+          <button type="button" className="control-icon" onClick={onProfile} aria-label="Profile"><UserPlus /><span className="tooltip">Profile</span></button>
+        </div>
+        <div className="control-group">
+          <button type="button" className="control-icon" onClick={onPower} aria-label="Rest console"><Power /><span className="tooltip">Rest</span></button>
+          <button type="button" className="control-icon" onClick={onClose} aria-label="Close Control Center"><X /><span className="tooltip">Close</span></button>
+        </div>
+      </div>
+      <span className="control-help">Press <kbd>Home</kbd> to open the Control Center</span>
+    </div>
+  );
+}
+
+function WelcomePanel({ account, onClose }: { account: Ps5Account | null; onClose: () => void }) {
+  return (
+    <div className="modal-root" role="dialog" aria-modal="true" aria-label="Console menu">
+      <div className="panel-shade">
+        <section className="overlay-panel panel-intro">
+          <div className="panel-header">
+            <h2>Welcome</h2>
+            <button type="button" className="icon-button close-button" onClick={onClose} aria-label="Close"><X size={24} /></button>
+          </div>
+          <div className="console-introduction">
+            <span className="intro-mark" style={{ filter: "none", color: "#438cff", fontWeight: 700, display: "grid", placeItems: "center" }}>VS</span>
+            <p className="intro-eyebrow">YOUR GAMES. YOUR MEDIA. ONE HOME.</p>
+            <h3>Welcome to your console{account ? `, ${account.displayName}` : ""}.</h3>
+            <p className="intro-summary">Vertex Station brings your HTML5 games and media together. Browse the carousel with the arrow keys, open the Game Library to install more, and press Home for the Control Center.</p>
+            <div className="intro-features">
+              <article><Gamepad2 /><div><h4>Play instantly</h4><p>Every game launches right in the console — no downloads to babysit.</p></div></article>
+              <article><Star /><div><h4>Make it yours</h4><p>Favorite games, rearrange Home and pick a theme that fits.</p></div></article>
+              <article><Music /><div><h4>Games &amp; media</h4><p>Switch between games and media apps with the tabs up top.</p></div></article>
+              <article><Settings /><div><h4>Fine-tune it</h4><p>Volume, avatars and console settings are always a couple taps away.</p></div></article>
+            </div>
+            <footer>
+              <span>You can reopen this anytime from Settings.</span>
+              <button type="button" className="solid-button" onClick={onClose}>Let&rsquo;s play</button>
+            </footer>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function VsGamePlayer({ game, sessionSec, sound, onVolume, onMute, onClose }: {
+  game: Ps5Game;
+  sessionSec: number;
+  sound: AudioSettings;
+  onVolume: (v: number) => void;
+  onMute: () => void;
+  onClose: () => void;
+}) {
+  const [paused, setPaused] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const volumePct = sound.muted ? 0 : sound.volume;
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onFs = () => setFullscreen(document.fullscreenElement === wrapRef.current);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  // Every game opens full-screen by default. requestFullscreen keeps the VS Home dock
+  // (rendered inside .game-player) on screen so the player can always switch games.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (el?.requestFullscreen && !document.fullscreenElement) el.requestFullscreen().catch(() => {});
+    return () => { if (document.fullscreenElement === el) document.exitFullscreen?.().catch(() => {}); };
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    sfx("controlOpen");
+    if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
+    const el = wrapRef.current;
+    if (el?.requestFullscreen) el.requestFullscreen().catch(() => {});
+  }, []);
+
+  const togglePause = useCallback(() => {
+    setPaused((p) => !p);
+    sfx("controlOpen");
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === " " || e.key === "Enter") { e.preventDefault(); togglePause(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [togglePause]);
+
+  return (
+      <div ref={wrapRef} className={`game-player${paused ? " is-paused" : ""}`} role="dialog" aria-modal="true" aria-label={`${game.name} is active in game`}>
+      {paused ? (
+        <div className="game-loading">
+          <img src={game.cover} alt="" />
+          <h1>{game.name}</h1>
+          <p>Paused</p>
         </div>
       ) : null}
+      <div className="ps5-game-wrap">
+        <GameFrame key={game.id} game={game} />
+      </div>
+      <div className="game-exit-dock">
+        <div className="game-dock-zone game-volume-zone">
+          <div className="game-dock-surface">
+            <button type="button" className="game-dock-icon" onClick={onMute} aria-label={sound.muted ? "Unmute" : "Mute"}>
+              {sound.muted ? <VolumeX size={23} /> : <Volume2 size={23} />}
+            </button>
+            <div className="game-volume-slider">
+              <label><span>GAME VOLUME</span><output>{volumePct}%</output></label>
+              <input type="range" min={0} max={100} value={volumePct} onChange={(e) => onVolume(Number(e.target.value))} aria-label="Game sound volume" style={{ "--volume": `${volumePct}%` } as CSSProperties} />
+            </div>
+            <span className="game-audio-status">{sound.muted ? "Console muted" : "Sound on"}</span>
+          </div>
+        </div>
+        <div className="game-dock-zone game-home-zone">
+          <button type="button" className="ps-home-button" onClick={onClose} aria-label="Go to console home">
+            <span className="game-dock-icon ps-home-mark">VS</span>
+            <span style={{ fontSize: 12 }}>Home</span>
+          </button>
+        </div>
+        <div className="game-dock-zone game-actions-zone">
+          <div className="game-dock-surface">
+            <button type="button" className="game-dock-icon" onClick={toggleFullscreen} aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} aria-pressed={fullscreen}>
+              {fullscreen ? <Minimize size={23} /> : <Maximize size={23} />}
+            </button>
+            <button type="button" className="game-dock-icon" onClick={() => { sfx("optionsOpen"); setOptionsOpen((o) => !o); }} aria-label="Game options" aria-pressed={optionsOpen}>
+              <MoreHorizontal size={23} />
+            </button>
+            <button type="button" className="game-dock-icon" onClick={onClose} aria-label="Close game">
+              <X size={23} />
+            </button>
+          </div>
+          {optionsOpen ? (
+            <div className="game-player-options">
+              <button type="button" onClick={togglePause}>{paused ? "Resume game" : "Pause game"}</button>
+              <button type="button" onClick={onMute}>{sound.muted ? "Unmute console" : "Mute console"}</button>
+              <button type="button" onClick={onClose}>Close game</button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PowerMenu({ account, onWake }: { account: Ps5Account | null; onWake: () => void }) {
+  return (
+    <div className="power-screen">
+      <div className="power-indicator rest"><Power size={46} /></div>
+      <h1>Vertex Station is resting</h1>
+      <p>{account ? `${account.displayName}, your console is still running in the background.` : "Your console is still running in the background."} Wake it up anytime to jump back in.</p>
+      <button type="button" onClick={onWake}><Play size={20} fill="currentColor" /> Wake console</button>
+      <p className="power-menu-note">Resting keeps your games paused where you left them. Sound and ambient music are suspended while you’re gone.</p>
     </div>
   );
 }
@@ -773,6 +1215,7 @@ export function Ps5EmulatorSurface({ surfaces }: { surfaces?: Ps5EmbeddedSurface
 function Ps5BootSurface({ account, onDone }: { account: Ps5Account | null; onDone: () => void }) {
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
+
   const firedRef = useRef(false);
 
   useEffect(() => {
@@ -796,14 +1239,14 @@ function Ps5BootSurface({ account, onDone }: { account: Ps5Account | null; onDon
       <div className="ps5-boot-orbit ps5-boot-orbit-one" aria-hidden="true" />
       <div className="ps5-boot-orbit ps5-boot-orbit-two" aria-hidden="true" />
       <div className="ps5-boot-inner">
-        <img className="ps5-boot-logo" src={PS5_BOOT_IMG} alt="PlayStation 5" draggable={false} />
+        <div className="ps5-boot-logo" aria-hidden="true"><span>VS</span></div>
         <div className="ps5-boot-returning">
-          <span>{account ? "Welcome back" : "Welcome to PlayStation"}</span>
+          <span>{account ? "Welcome back" : "Welcome to Vertex Station"}</span>
           {account ? <strong>{account.displayName}</strong> : <strong>Vertex Player</strong>}
           {account ? <div className="ps5-boot-avatar" style={avatarVisual(account)}>{account.displayName.slice(0, 1).toUpperCase()}</div> : null}
         </div>
         <div className="ps5-boot-loader" aria-hidden="true"><span /></div>
-        <div className="ps5-boot-caption">Your games. Your world.</div>
+        <div className="ps5-boot-caption">Your games. Your station.</div>
       </div>
       <button type="button" className="ps5-boot-skip" onClick={skipIntro}>Skip intro <ChevronRight size={14} /></button>
     </div>
@@ -919,22 +1362,16 @@ type RewriteCtx = {
 };
 
 function sanitizeBannedUrls(html: string, bannedUsers: Set<string>): string {
-  // Rewrite cdn.jsdelivr.net/gh/{user}/{repo}@{ref}/{path} -> raw.githack.com/{user}/{repo}/{branchOrCommit}/{path}
-  // for accounts that jsDelivr has banned (403). githack serves the SAME live GitHub
-  // content with correct MIME + CORS and has no account bans, so any pinned commit
-  // SHA, branch name, or @latest (-> /main/) resolves. Non-banned URLs pass through.
   return html.replace(
     /https?:\/\/cdn\.jsdelivr\.net\/gh\/([a-z0-9A-Z-]+)\/([^/@\s]+?)(?:@([^/@\s]+?))?(\/[^"'<>\s]*)?/g,
     (whole, user, repo, ref, path) => {
-      if (!bannedUsers.has(user)) return whole; // keep jsDelivr (faster) for healthy accounts
+      if (!bannedUsers.has(user)) return whole;
       const branch = !ref || ref === "latest" ? "main" : ref;
       return `https://raw.githack.com/${user}/${repo}/${branch}${path ?? ""}`;
     }
   );
 }
 
-// Account-level jsDelivr bans (all repos alive on GitHub @ main). Keeping this list
-// small & authoritative; anything not listed still uses fast jsDelivr.
 const JS_DELIVR_BANNED_USERS = new Set([
   "genizy",
   "web-ports",
@@ -953,9 +1390,6 @@ const JS_DELIVR_BANNED_USERS = new Set([
 ]);
 
 function neutralizeBootKillers(html: string): string {
-  // Blob iframes can't register a service worker (SecurityError → frozen boot),
-  // and ad/tracker tags (gtag/adsbygoogle) hang on strict school networks.
-  // Strip them so games actually boot to the playable loader.
   html = html.replace(
     /<script[^>]*>(?:[\s\S]*?)(?:navigator\.serviceWorker\.register|ServiceWorkerContainer)(?:[\s\S]*?)<\/script>/gi,
     "<!-- sw stripped -->"
@@ -979,7 +1413,7 @@ function canInlineGame(src: string): boolean {
   try { return INLINEABLE_GAME_HOSTS.has(new URL(src).hostname); } catch { return false; }
 }
 
-function GameFrame({ game }: { game: Ps5Game }) {
+function GameFrame({ game, onLoad }: { game: Ps5Game; onLoad?: () => void }) {
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [src, setSrc] = useState<string | null>(null);
   const [direct, setDirect] = useState(false);
@@ -1030,6 +1464,14 @@ function GameFrame({ game }: { game: Ps5Game }) {
     };
   }, [game.play, attempt]);
 
+  if (game.proxy) {
+    return (
+      <div className="ps5-game-wrap">
+        <ProxyUrlFrame url={game.play} title={game.name} blockAds />
+      </div>
+    );
+  }
+
   if (state === "error") {
     return (
       <div className="ps5-game-msg">
@@ -1055,43 +1497,32 @@ function GameFrame({ game }: { game: Ps5Game }) {
           allow="autoplay; clipboard-write; camera; microphone; fullscreen; gamepad; encrypted-media"
           allowFullScreen
           referrerPolicy="no-referrer"
+          onLoad={() => onLoad?.()}
         />
       ) : null}
     </div>
   );
 }
 
-function Ps5Card({ game, onHover, onSelect, selected = false }: { game: Ps5Game; onHover?: (cover: string | null) => void; onSelect?: () => void; selected?: boolean }) {
-  return (
-    <button
-      type="button"
-      className={`ps5-card ${selected ? "selected" : ""}`}
-      onClick={() => onSelect?.()}
-      title={`Play ${game.name}`}
-      onMouseEnter={() => { onHover?.(game.cover); onSelect?.(); }}
-      onMouseLeave={() => onHover?.(null)}
-      aria-pressed={selected}
-    >
-      <img className="ps5-card-img" src={game.cover} alt={game.name} loading="lazy" draggable={false} />
-      <span className="ps5-card-name">{game.name}</span>
-      <span className="ps5-card-publisher">Vertex game collection</span>
-      <span className="ps5-card-open">Play <ChevronRight size={13} /></span>
-    </button>
-  );
-}
-
 function Ps5SearchField({ value, onChange, placeholder }: { value: string; onChange: (next: string) => void; placeholder: string }) {
   return (
-    <div className="ps5-search-bar">
-      <Search size={17} />
+    <div className="search-field">
+      <Search size={20} />
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder} />
-      {value ? <button type="button" className="ps5-search-clear" onClick={() => onChange("")} aria-label="Clear search"><X size={15} /></button> : null}
+      {value ? <button type="button" className="search-clear" onClick={() => onChange("")} aria-label="Clear search"><X size={17} /></button> : <kbd>/</kbd>}
     </div>
   );
 }
 
 /** Renders the real in-OS app (Spicetify / VerTube / Messages) inside the console. */
 function MediaAppStage({ app, surfaces, onExit }: { app: MediaApp; surfaces?: Ps5EmbeddedSurfaces; onExit: () => void }) {
+  if (app.id === "browser") {
+    return (
+      <div className="ps5-media-app">
+        <BrowserSurface />
+      </div>
+    );
+  }
   if (app.id === "spotify") {
     if (!surfaces?.spotify) return <MediaAppMissing name={app.name} />;
     const Spotify = surfaces.spotify;
@@ -1141,16 +1572,34 @@ function Ps5SettingsPanel({
   deviceMode,
   installedCount,
   recentCount,
+  sound,
+  theme,
+  favOnly,
+  onFavOnly,
+  tab,
+  onTab,
+  onSound,
+  onTheme,
   onDeviceMode,
   onUpdate,
+  onPower,
   onClose,
 }: {
   account: Ps5Account | null;
   deviceMode: DeviceMode;
   installedCount: number;
   recentCount: number;
+  sound: AudioSettings;
+  theme: string;
+  favOnly: boolean;
+  onFavOnly: (next: boolean) => void;
+  tab: "profile" | "sound" | "theme" | "library";
+  onTab: (next: "profile" | "sound" | "theme" | "library") => void;
+  onSound: (patch: Partial<AudioSettings>) => void;
+  onTheme: (theme: string) => void;
   onDeviceMode: (mode: DeviceMode) => void;
   onUpdate: (next: Ps5Account) => void;
+  onPower: () => void;
   onClose: () => void;
 }) {
   const [displayName, setDisplayName] = useState(account?.displayName ?? "");
@@ -1226,125 +1675,186 @@ function Ps5SettingsPanel({
   };
 
   return (
-    <div className="ps5-settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="ps5-settings-panel" role="dialog" aria-modal="true" aria-labelledby="ps5-settings-title">
-        <header className="ps5-settings-head">
-          <div>
-            <span className="ps5-home-kicker">CONSOLE SETTINGS</span>
-            <h2 id="ps5-settings-title">Profile &amp; device</h2>
+    <div className="modal-root">
+      <div className="panel-shade" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+        <section className="overlay-panel panel-settings" role="dialog" aria-modal="true" aria-labelledby="vs-settings-title">
+          <div className="panel-header">
+            <h2 id="vs-settings-title">Settings</h2>
+            <button type="button" className="icon-button" onClick={onClose} aria-label="Close settings"><X size={22} /></button>
           </div>
-          <button type="button" className="ps5-dialog-close" onClick={onClose} aria-label="Close settings"><X size={18} /></button>
-        </header>
-
-        <div className="ps5-settings-body">
-          <div className="ps5-settings-profile">
-            <span className="ps5-settings-avatar" style={avatarVisual(draft)}>{(displayName || account?.displayName || "P").slice(0, 1).toUpperCase()}</span>
-            <div>
-              <strong>{displayName || account?.displayName || "Player"}</strong>
-              <span>@{username || account?.username || "guest"}</span>
-            </div>
+          <div className="panel-tabs" role="tablist" aria-label="Settings sections">
+            <button type="button" className={tab === "profile" ? "active" : ""} onClick={() => onTab("profile")} role="tab" aria-selected={tab === "profile"}>Profile</button>
+            <button type="button" className={tab === "sound" ? "active" : ""} onClick={() => onTab("sound")} role="tab" aria-selected={tab === "sound"}>Sound</button>
+            <button type="button" className={tab === "theme" ? "active" : ""} onClick={() => onTab("theme")} role="tab" aria-selected={tab === "theme"}>Theme</button>
+            <button type="button" className={tab === "library" ? "active" : ""} onClick={() => onTab("library")} role="tab" aria-selected={tab === "library"}>Library</button>
           </div>
 
-          <div className="ps5-settings-field">
-            <span>Profile photo</span>
-            <div className="ps5-settings-photo">
-              <button type="button" className="ps5-settings-photo-btn" onClick={() => fileRef.current?.click()}>
-                <UserPlus size={15} /> {avatar ? "Replace photo" : "Upload a photo"}
-              </button>
-              {avatar ? (
-                <button type="button" className="ps5-settings-photo-clear" onClick={() => setAvatar(undefined)}>
-                  <X size={15} /> Use colour
-                </button>
-              ) : null}
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="ps5-settings-file"
-                onChange={(event) => {
-                  pickPhoto(event.target.files?.[0]);
-                  event.target.value = "";
-                }}
-              />
-            </div>
-            <em>Square images look best. This stays on your console only.</em>
-          </div>
-
-          <label className="ps5-settings-field">
-            <span>Display name</span>
-            <input value={displayName} maxLength={20} onChange={(e) => { setDisplayName(e.target.value); setError(""); }} aria-label="Display name" spellCheck={false} />
-            <em>Shown on the console only.</em>
-          </label>
-
-          <label className="ps5-settings-field">
-            <span>Username</span>
-            <input
-              value={username}
-              maxLength={16}
-              onChange={(e) => { setUsername(e.target.value); setError(""); }}
-              aria-label="Console username"
-              spellCheck={false}
-              className={userError && username !== account?.username ? "bad" : ""}
-            />
-            <em>3 to 16 letters or numbers.</em>
-          </label>
-
-          <div className="ps5-settings-field">
-            <span>Avatar colour</span>
-            <div className="ps5-settings-swatches">
-              {AVATAR_HUES.map((option) => (
-                <button key={option} type="button" className={`ps5-settings-swatch ${hue === option && !avatar ? "on" : ""}`} style={avatarStyle(option)} onClick={() => setHue(option)} aria-label={`Avatar colour ${option}`} aria-pressed={hue === option} />
-              ))}
-            </div>
-            <em>Your console profile picture colour.</em>
-          </div>
-
-          {account?.dob ? (
-            <div className="ps5-settings-field">
-              <span>Date of birth</span>
-              <p className="ps5-settings-static">{account.dob}</p>
+          {tab === "profile" ? (
+            <div className="settings-list">
+              <div className="profile-summary">
+                <span className="profile-indicator"><span className="avatar-art" style={avatarVisual(draft)}>{(displayName || account?.displayName || "P").slice(0, 1).toUpperCase()}</span></span>
+                <span className="online" aria-hidden="true" />
+                <div className="profile-summary-name">
+                  <h3>{displayName || account?.displayName || "Player"}</h3>
+                  <p>@{username || account?.username || "guest"}</p>
+                </div>
+              </div>
+              <div className="profile-editor">
+                <div className="ps5-settings-photo">
+                  <button type="button" className="ps5-settings-photo-btn" onClick={() => fileRef.current?.click()}>
+                    <UserPlus size={15} /> {avatar ? "Replace photo" : "Upload a photo"}
+                  </button>
+                  {avatar ? (
+                    <button type="button" className="ps5-settings-photo-clear" onClick={() => setAvatar(undefined)}>
+                      <X size={15} /> Use colour
+                    </button>
+                  ) : null}
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    className="ps5-settings-file"
+                    onChange={(event) => {
+                      pickPhoto(event.target.files?.[0]);
+                      event.target.value = "";
+                    }}
+                  />
+                </div>
+                <label className="form-field">
+                  <span>Display name</span>
+                  <input value={displayName} maxLength={20} onChange={(e) => { setDisplayName(e.target.value); setError(""); }} aria-label="Display name" spellCheck={false} />
+                </label>
+                <label className="form-field">
+                  <span>Username</span>
+                  <input
+                    value={username}
+                    maxLength={16}
+                    onChange={(e) => { setUsername(e.target.value); setError(""); }}
+                    aria-label="Console username"
+                    spellCheck={false}
+                    className={userError && username !== account?.username ? "bad" : ""}
+                  />
+                  <em>{userError || "3 to 16 letters or numbers."}</em>
+                </label>
+                <legend>Avatar colour</legend>
+                <div className="avatar-choices">
+                  {AVATAR_HUES.map((option) => (
+                    <button key={option} type="button" className={hue === option && !avatar ? "on" : ""} style={avatarStyle(option)} onClick={() => setHue(option)} aria-label={`Avatar colour ${option}`} aria-pressed={hue === option && !avatar} />
+                  ))}
+                </div>
+                <div className="ps5-settings-modes">
+                  <label className="list-row">
+                    <Monitor size={22} />
+                    <span>Controller mode</span>
+                    <div className="mode-choice">
+                      <button type="button" className={deviceMode === "pc" ? "on" : ""} onClick={() => onDeviceMode("pc")}>PC / Normal</button>
+                      <button type="button" className={deviceMode === "controller" ? "on" : ""} onClick={() => onDeviceMode("controller")}>Controller</button>
+                    </div>
+                  </label>
+                </div>
+                {account?.dob ? (
+                  <label className="form-field">
+                    <span>Date of birth</span>
+                    <p className="ps5-settings-static">{account.dob}</p>
+                  </label>
+                ) : null}
+                {error ? <p className="ps5-settings-error">{error}</p> : null}
+                <div className="form-actions">
+                  <button type="button" className="secondary-button" onClick={onClose}>Close</button>
+                  <button type="button" className="solid-button" onClick={save} disabled={!dirty}>
+                    {saved ? <><Check size={18} /> Saved</> : <><Check size={18} /> Save changes</>}
+                  </button>
+                </div>
+              </div>
             </div>
           ) : null}
 
-          <div className="ps5-settings-field">
-            <span>Controller mode</span>
-            <div className="ps5-settings-modes">
-              <button type="button" className={deviceMode === "pc" ? "on" : ""} onClick={() => onDeviceMode("pc")}><Monitor size={15} /> PC / Normal</button>
-              <button type="button" className={deviceMode === "controller" ? "on" : ""} onClick={() => onDeviceMode("controller")}><Gamepad2 size={15} /> Controller</button>
+          {tab === "sound" ? (
+            <div className="settings-list panel-sound">
+              <label className="slider-label">
+                <span>Master volume</span>
+                <output>{sound.muted ? "Muted" : `${sound.volume}%`}</output>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={sound.muted ? 0 : sound.volume}
+                  onChange={(e) => onSound({ volume: Number(e.target.value), muted: false })}
+                  aria-label="Console volume"
+                  style={{ "--volume": `${sound.muted ? 0 : sound.volume}%` } as CSSProperties}
+                />
+              </label>
+              <label className="list-row">
+                <Volume2 size={22} />
+                <span>Sound effects</span>
+                <small>{sound.effects ? "On" : "Off"}</small>
+                <button type="button" className={`toggle ${sound.effects ? "on" : ""}`} onClick={() => { onSound({ effects: !sound.effects }); sfx(!sound.effects ? "controlOpen" : "back"); }} aria-pressed={sound.effects} aria-label="Toggle sound effects" />
+              </label>
+              <label className="list-row">
+                <Music size={22} />
+                <span>Ambient music</span>
+                <small>{sound.music ? "On" : "Off"}</small>
+                <button type="button" className={`toggle ${sound.music ? "on" : ""}`} onClick={() => setMusicEnabled(!sound.music)} aria-pressed={sound.music} aria-label="Toggle ambient music" />
+              </label>
+              <label className="list-row">
+                {sound.muted ? <VolumeX size={22} /> : <Volume2 size={22} />}
+                <span>Mute console</span>
+                <small>{sound.muted ? "Muted" : "Unmuted"}</small>
+                <button type="button" className={`toggle ${sound.muted ? "on" : ""}`} onClick={() => { onSound({ muted: !sound.muted }); sfx(sound.muted ? "controlOpen" : "back"); }} aria-pressed={sound.muted} aria-label="Toggle mute" />
+              </label>
             </div>
-            <em>How games respond to input this session.</em>
-          </div>
+          ) : null}
 
-          <div className="ps5-settings-field">
-            <span>Library</span>
-            <div className="ps5-me-stats">
-              <span>{installedCount} installed</span>
-              <span>{recentCount} recently played</span>
+          {tab === "theme" ? (
+            <div className="settings-list">
+              <p className="section-label">Accent colour</p>
+              <div className="color-choices">
+                {THEMES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={theme === t.id ? "on" : ""}
+                    style={{ background: `linear-gradient(135deg, ${t.accent}, ${t.soft})` }}
+                    onClick={() => { onTheme(t.id); sfx("select"); }}
+                    aria-label={`${t.name} theme`}
+                    aria-pressed={theme === t.id}
+                  />
+                ))}
+              </div>
+              <p className="muted-copy">Every accent on the console follows this colour — buttons, highlights and the system music feel.</p>
             </div>
-          </div>
+          ) : null}
 
-          <p className="ps5-settings-note">These settings only change the PS5 emulator profile.{hasMessagesProfile() ? " Your Messages app account stays exactly as it is." : ""}</p>
-
-          {error ? <p className="ps5-settings-error">{error}</p> : null}
-
-          <div className="ps5-dialog-actions">
-            <button type="button" className="ps5-dialog-secondary" onClick={onClose}>Close</button>
-            <button type="button" className="ps5-play-btn" onClick={save} disabled={!dirty}>
-              {saved ? <><Check size={15} /> Saved</> : <><Check size={15} /> Save changes</>}
-            </button>
-          </div>
-        </div>
-      </section>
+          {tab === "library" ? (
+            <div className="settings-list">
+              <p className="section-label">Your library</p>
+              <label className="list-row">
+                <PanelsTopLeft size={22} />
+                <span>Installed games</span>
+                <small>{installedCount}</small>
+              </label>
+              <label className="list-row">
+                <Play size={22} />
+                <span>Recently played</span>
+                <small>{recentCount}</small>
+              </label>
+              <label className="list-row">
+                <Star size={22} />
+                <span>Show favorites only on Home</span>
+                <small>{favOnly ? "On" : "Off"}</small>
+                <button type="button" className={`toggle ${favOnly ? "on" : ""}`} onClick={() => { sfx("navigate"); onFavOnly(!favOnly); }} aria-pressed={favOnly} aria-label="Toggle favorites only" />
+              </label>
+              <label className="list-row">
+                <Power size={22} />
+                <span>Rest console</span>
+                <small>Pauses everything</small>
+                <button type="button" className="chevron" onClick={onPower} aria-label="Rest console"><ChevronRight size={20} /></button>
+              </label>
+              <p className="muted-copy">Installed games live in your browser. Favorites and recently-played are saved with your profile.</p>
+            </div>
+          ) : null}
+        </section>
+      </div>
     </div>
-  );
-}
-
-function Ps5StoreCard({ game, onSelect, onHover }: { game: Ps5Game; onSelect: () => void; onHover?: (cover: string | null) => void }) {
-  return (
-    <button type="button" className="ps5-card ps5-store-card-main" onClick={onSelect} title={`View ${game.name} options`} onMouseEnter={() => onHover?.(game.cover)} onMouseLeave={() => onHover?.(null)}>
-      <img className="ps5-card-img" src={game.cover} alt={game.name} loading="lazy" draggable={false} />
-      <span className="ps5-card-name">{game.name}</span>
-      <span className="ps5-store-open">View options <ChevronRight size={13} /></span>
-    </button>
   );
 }

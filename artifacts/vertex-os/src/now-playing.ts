@@ -17,8 +17,14 @@ export type MediaSession = {
   playing: boolean;
   progress: number;
   duration: number;
+  volume?: number;
+  muted?: boolean;
   onToggle?: () => void;
   onSeek?: (time: number) => void;
+  onNext?: () => void;
+  onPrev?: () => void;
+  onSetVolume?: (volume: number) => void;
+  onToggleMute?: () => void;
   onClose?: () => void;
 };
 

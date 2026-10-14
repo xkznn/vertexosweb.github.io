@@ -1,7 +1,8 @@
 import { MessageCircle } from "lucide-react";
+import { assetUrl } from "../asset-map";
 
 const BASE = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
-const asset = (path: string) => `${BASE}${path}`;
+const asset = (path: string) => assetUrl(BASE, path);
 
 export function DiscordApp() {
   return (

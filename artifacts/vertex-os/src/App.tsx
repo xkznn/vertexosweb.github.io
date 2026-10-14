@@ -7,7 +7,7 @@ import {
   Image, LayoutGrid, LockKeyhole, Menu, MessageCircle, Minus, MonitorCog, Music2,
   Palette, Pin, PinOff, Play, Power, Puzzle, Radio, Rocket, RotateCcw,
   Settings2, ShieldBan, SlidersHorizontal, Search, Sparkles, Terminal, Volume2, VolumeX, Waves, X, Pause, Maximize, Maximize2, Minimize2, House, Plus, Package, EyeOff, ExternalLink, Contrast, Calculator,
-  Shuffle, Repeat, Clock, ListVideo, Trash2, Link2, User, Languages, Info, Monitor, Paintbrush, SunMoon, Cloud,
+  Shuffle, Repeat, Clock, ListVideo, Trash2, Link2, User, Languages, Info, Monitor, Paintbrush, SunMoon, Cloud, FileDown,
 } from "lucide-react";
 
 
@@ -18,6 +18,8 @@ import { VertexStudioWallpaper } from "./components/vertex-wallpaper";
 import { HalloweenDecor, HalloweenWallpaper } from "./components/halloween";
 import { MusicWidgetLayer, MusicWidgetManager } from "./components/music-widgets";
 import { LockAppsLayer, LockAppsManager, recordRecentApp } from "./components/lock-apps";
+import { AdminSurface } from "./components/admin-app";
+import { startAnalytics, trackEvent } from "./analytics";
 import { MessagesSurface } from "./messages";
 import { MC_REALMS, type McRealm } from "./mcrealms";
 import { LANG, LANGS, t, tf, tp, readLang, saveLang, localeOf, type Lang } from "./i18n";
@@ -26,6 +28,7 @@ import { SystemTray } from "./components/system-tray";
 import { MacMenuBar } from "./components/mac-menubar";
 import { AlternativePanel, DesktopWidgets, MovableWidget, type WidgetId, type WidgetPosition, type WidgetSkin } from "./components/desktop-widgets";
 import { LinksApp } from "./components/links-app";
+import { assetUrl } from "./asset-map";
 import { DiscordApp } from "./components/discord-app";
 import { TerminalBanner } from "./terminal/TerminalBanner";
 import { ansiToNodes } from "./terminal/ansi";
@@ -35,7 +38,7 @@ import { PERF } from "./perf";
 import { GhostPayloadCard, GhostViewSurface, captureScreenHtml, ghostDeliver, ghostExecute, ghostProbe, ghostSetSnapGetter, ghostSetStatus, ghostStop, ghostUiStore, snapSig, startGhostView, useGhostViewUi, type GvIncoming, type GvSnap, type GvWindow } from "./ghostview";
 import { getMediaSession, setMediaSession, notifyMediaSession, subscribeMediaSession, type MediaSession } from "./now-playing";
 type WallpaperId = "vertex-studio" | "halloween" | "macos-default" | "macos-lock" | "singularity" | "snake-skeleton" | "snow-fox" | "cine55" | "gojo" | "rainy-city" | "green-anime" | "brother" | "99-med" | "gojo-sukuna" | "sukuna-fire" | "desktop-lines" | "skello" | "we-black-hole" | "we-snow-fox" | "we-gojo-sukuna" | "we-sukuna-fire" | "we-cine-55" | "we-snake" | "we-green-anime" | "we-brother" | "we-gojo" | "we-rainy-city" | "we-desktop-lines" | "we-skello" | "we-99-med" | "we-45e33" | "we-f1-formula" | "we-hunt-shadow-2" | "we-minecraft-01" | "we-minecraft-02" | "we-minecraft-03" | "we-monkey" | "we-supra-drift" | "we-yuji-52" | "we-cozy-fox" | "we-yuta" | "we-bmw-car-driving" | "we-eyes-toward-heaven" | "we-goku-ultra" | "we-galaxy-eyes" | "we-celestial-battle" | "we-tess-kotkin" | "we-yuta-rika" | "we-satoru-gojo" | "we-dark-angel" | "we-makima-devilish" | "we-makima-burning" | "we-haimiya-mio" | "we-toji" | "we-mamonir" | "we-lantern-festival" | "we-miyabi" | "we-qingxiao" | "we-megumin" | "we-odette" | "we-blue-sky" | "we-frutiger" | "we-synthwave-dmc" | "we-zankou" | "we-ghost-rider" | "we-molala" | "we-dark-king" | "we-celestial-veil" | "we-miku-nakano" | "we-gotoubun" | "we-quintuplets" | "we-black-silk-waves" | "we-blue-dragon-logo" | "we-astra-yao" | "we-luo-tianyi-christmas" | "we-mc-northern-light" | "we-mc-falling-snow" | "we-mc-aquarium" | "we-mc-holiday-heart" | "we-mc-fireplace" | "we-mc-panels" | "we-mc-cherry-blossom" | "we-mc-raindrops" | "we-silver-surfer" | "we-girl-behind-curtains" | "we-vagabond-miyamoto" | "we-itachi-crow" | "we-gojo-hollow" | "we-quintuplets-sister" | "we-yuta-okkotsu" | "we-gojo-vs-sukuna-2" | "we-gojo-cursed-world" | "we-gojo-six-eyes" | "we-frieren-blue-horizon" | "we-frieren-blooming-stream" | "we-nissan-skyline-r33-mc" | "we-torii";
-type AppId = "hub" | "spicetify" | "browser" | "pizza" | "roblox" | "messages" | "verai" | "vertube" | "settings" | "games" | "translucenttb" | "wallpaper-engine" | "minecraft" | "rainmeter" | "terminal" | "calculator" | "ghostview" | "links" | "discord" | "vcloud";
+type AppId = "hub" | "spicetify" | "browser" | "pizza" | "roblox" | "messages" | "verai" | "vertube" | "settings" | "games" | "translucenttb" | "wallpaper-engine" | "minecraft" | "rainmeter" | "terminal" | "calculator" | "ghostview" | "links" | "discord" | "vcloud" | "admin";
 type Ps5DesktopShortcut = { id: string; name: string; cover: string };
 type TaskbarPos = "bottom" | "top" | "left" | "right";
 type WindowRect = { x: number; y: number; w: number; h: number };
@@ -197,7 +200,7 @@ function ghostEnterCtrl() {
 }
 
 const base = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
-const asset = (path: string) => `${base}${path}`;
+const asset = (path: string) => assetUrl(base, path);
 
 const screenHighRes = typeof window !== "undefined" && window.devicePixelRatio * window.innerWidth >= 3200;
 const nativeVideoQualified = !PERF.low && screenHighRes;
@@ -414,6 +417,7 @@ function getApp(id: AppId, overrides: Record<string, AppOverride>) {
     const gvOv = overrides.ghostview ?? {};
     return { ...GV_APP, title: gvOv.name ?? GV_APP.title, showName: gvOv.showName ?? false };
   }
+  if (id === "admin") return { id: "admin" as AppId, title: "Control Panel", subtitle: "restricted", icon: Settings2, pinned: false, showName: false, squircle: false };
   const base = apps.find((app) => app.id === id) ?? apps[0];
   const ov = overrides[id] ?? {};
   return { ...base, title: ov.name ?? base.title, showName: ov.showName ?? false, iconUrl: ov.iconUrl };
@@ -1432,7 +1436,7 @@ onSessionClose: (peerCode) => {
     document.title = cloak.title;
     let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
     if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
-    link.href = cloak.icon || "/favicon.svg";
+    link.href = cloak.icon || asset("favicon.svg");
   }, [settings.cloak, settings.cloakName, settings.cloakIcon]);
 
   useEffect(() => {
@@ -1549,10 +1553,22 @@ onSessionClose: (peerCode) => {
       if (phase === "desktop" && !isEditing && settings.panicKey && event.key.toLowerCase() === settings.panicKey.toLowerCase()) {
         redirectPanic();
       }
+      if (event.ctrlKey && event.altKey && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        setWindows((prev) => prev.some((w) => w.id === "admin") ? prev.map((w) => (w.id === "admin" ? { ...w, minimized: false } : w)) : [...prev, { id: "admin", minimized: false, maximized: false, rect: defaultWindowRect(prev.length), prevRect: null }]);
+        return;
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onAdminLaunch = (event: Event) => { const detail = (event as CustomEvent).detail; if (typeof detail === "string") toggleApp(detail as AppId); };
+    window.addEventListener("vertex-open-app", onAdminLaunch);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("vertex-open-app", onAdminLaunch); };
   });
+
+  useEffect(() => {
+    const stop = startAnalytics();
+    return stop;
+  }, []);
 
   useEffect(() => {
     if (phase !== "boot" || !settings.fastBoot) return;
@@ -1866,6 +1882,7 @@ onSessionClose: (peerCode) => {
       return;
     }
     try { recordRecentApp(id, getApp(id, appOverrides).title); } catch { /* noop */ }
+    try { void trackEvent("app_open", { app: id, title: getApp(id, appOverrides).title }); } catch { /* noop */ }
     const existing = windows.find((item) => item.id === id);
     if (!existing) {
       setWindows((items) => [...items, { id, minimized: false, maximized: false, rect: defaultWindowRect(items.length), prevRect: null }]);
@@ -5492,6 +5509,7 @@ function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (k
   if (id === "links") return <LinksApp />;
   if (id === "discord") return <DiscordApp />;
   if (id === "vcloud") return <iframe className="browser-frame" src={asset("vcloud/index.html")} title="V-CLOUD" allow="autoplay; clipboard-write; camera; microphone; fullscreen" />;
+  if (id === "admin") return <AdminSurface />;
   return <div className="window-surface"><div className="surface-kicker">VERTEX</div><h2 className="surface-title">surface</h2></div>;
 }
 
@@ -5520,11 +5538,11 @@ function NowPlayingCard() {
     return null;
 }
 
-const EAGLER_SINGLE = "/eaglercraft/index.html";
-const EAGLER_ARCHMC = "/eaglercraft/index.html?server=wss%3A%2F%2Fmc.arch.lol%2F";
-const MODPACK_WASM = "/eaglercraft-modpack/index.html";
-const EAGLER_112 = "/eaglercraft-1.12/index.html";
-  const EAGLER_152 = "/eaglercraft-1.5/index.html";
+const EAGLER_SINGLE = `${base}eaglercraft/index.html`;
+const EAGLER_ARCHMC = `${base}eaglercraft/index.html?server=wss%3A%2F%2Fmc.arch.lol%2F`;
+const MODPACK_WASM = `${base}eaglercraft-modpack/index.html`;
+const EAGLER_112 = `${base}eaglercraft-1.12/index.html`;
+const EAGLER_152 = `${base}eaglercraft-1.5/index.html`;
 const MC_STORE_ICON = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTKxNUnlY6yNmkSbNQvrCsC_ijNVTFl463i6SO8b5jCo9LsAvicsF9PqTKZ&s=10";
 const MC_TRAILER = "https://cdn.eaglercraft.ru/Official_Minecraft_Trailer.webm";
 const MC_LOGO_SVG = "https://www.minecraft.net/content/dam/minecraftnet/games/minecraft/logos/Global-Header_MCCB-Logo_300x51.svg";
@@ -5622,7 +5640,7 @@ function MinecraftLauncherSurface() {
 
   if (mode === "eagler" || mode === "archmc" || mode === "modpack" || mode === "eagler112" || mode === "eagler152") {
     const title = mode === "eagler" ? "Eaglercraft 1.8.8 — Singleplayer" : mode === "eagler112" ? t("minecraft.eagler112Edition") : mode === "eagler152" ? t("minecraft.eagler152Edition") : mode === "modpack" ? `${modTitle} — Eaglercraft 1.6.4` : `${serverName} — Eaglercraft 1.8`;
-    const src = mode === "eagler" ? EAGLER_SINGLE : mode === "eagler112" ? EAGLER_112 : mode === "eagler152" ? EAGLER_152 : mode === "modpack" ? MODPACK_WASM : serverAddr ? `/eaglercraft/index.html?server=${encodeURIComponent(serverAddr)}` : EAGLER_ARCHMC;
+    const src = mode === "eagler" ? EAGLER_SINGLE : mode === "eagler112" ? EAGLER_112 : mode === "eagler152" ? EAGLER_152 : mode === "modpack" ? MODPACK_WASM : serverAddr ? `${base}eaglercraft/index.html?server=${encodeURIComponent(serverAddr)}` : EAGLER_ARCHMC;
     return <div className="window-surface we-app-surface" ref={gameFrameRef}><div className="mc-bar">
       <button className="mc-back" onClick={() => { setLoading(true); setMode("menu"); }}>{t("minecraft.back")}</button>
       <span>{title}</span>
@@ -5951,6 +5969,8 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, o
   const [passwordDraft, setPasswordDraft] = useState("");
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [blankNotice, setBlankNotice] = useState<string | null>(null);
+  const [offlineBusy, setOfflineBusy] = useState(false);
+  const [offlineNote, setOfflineNote] = useState<string | null>(null);
   const hasPassword = Boolean(storage.read<string>(PASSWORD_KEY, ""));
 
   const applySystemStyle = (style: SystemStyle) => {
@@ -6011,6 +6031,71 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, o
     doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><link rel="icon" href="${icon}"><style>html,body{margin:0;height:100%;overflow:hidden}iframe{display:block;width:100vw;height:100vh;border:0}</style></head><body><iframe src="${src}" allow="autoplay; clipboard-write; camera; microphone; fullscreen"></iframe></body></html>`);
     doc.close();
     win.focus();
+  };
+  const downloadOfflineHtml = async () => {
+    setOfflineBusy(true);
+    setOfflineNote(null);
+    try {
+      if (location.protocol === "file:") {
+        setOfflineNote("You're already running the offline copy.");
+        return;
+      }
+      // Vite dev servers fall back to the (almost empty) dev index.html for unknown paths —
+      // that stub is only a few KB and loads /src/main.tsx, so reject it instead of downloading a blank file.
+      const isStub = (t: string) => t.length < 100_000 || t.includes("/src/main.tsx") || t.includes("@vite/client");
+      const bust = `?v=${Date.now()}`;
+      const bases = Array.from(new Set<string>([
+        import.meta.env.BASE_URL,
+        "/",
+        new URL(".", location.href).pathname,
+      ])).map((b) => (b.endsWith("/") ? b : `${b}/`));
+      // Try the same-origin copies first (fast, always current), each with a cache-busting query so a
+      // stale cached 404 can't win. If none work, fall back to a cross-origin raw GitHub mirror — it is
+      // served with CORS * and lives on a different origin, so this site's own service worker / cache
+      // can never intercept it. That makes the download work even when a stale SW is blocking the local file.
+      const urls = [
+        ...bases.map((b) => new URL(`single/index.html${bust}`, location.origin + b).href),
+        `https://cdn.jsdelivr.net/gh/xkznn/vertexosweb.github.io@main/single/index.html${bust}`,
+        `https://raw.githubusercontent.com/xkznn/vertexosweb.github.io/main/single/index.html${bust}`,
+      ];
+      let html: string | null = null;
+      for (const u of urls) {
+        try {
+          const res = await fetch(u, { cache: "reload", credentials: "omit" });
+          if (!res.ok) continue;
+          const t = await res.text();
+          if (isStub(t)) continue;
+          html = t;
+          break;
+        } catch { /* try the next URL */ }
+      }
+      if (html === null) {
+        // Fetch probes all failed (blocked network / CORS). Fall back to the browser's own download
+        // of the same-origin copy, which is not subject to fetch/CORS rules.
+        const a = document.createElement("a");
+        a.href = new URL("single/index.html", location.origin + bases[0]).href;
+        a.download = "vertex-os.html";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setOfflineNote("Download started using the browser directly. If the file looks empty, hard-refresh (Ctrl+Shift+R) and try again.");
+        return;
+      }
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "vertex-os.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setOfflineNote("Saved — open vertex-os.html anywhere, no internet needed.");
+    } catch {
+      setOfflineNote("Couldn't grab the offline copy. Check your connection, then hard-refresh (Ctrl+Shift+R) and try again.");
+    } finally {
+      setOfflineBusy(false);
+    }
   };
   const renderPane = () => {
     switch (tab) {
@@ -6223,6 +6308,11 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, o
             <SettingToggle label={t("set.adblockLabel")} help={t("set.adblockHelp")} value={settings.adblock} onChange={(value) => updateSetting("adblock", value)} />
             {settings.adblock && <div className="setting-row setting-stack"><div><strong>{t("set.adblockTargetLabel")}</strong><small>{t("set.adblockTargetHelp")}</small></div><input className="setting-input setting-url" type="url" value={settings.adblockUrl} placeholder="https://hideout-now.lovable.app/" onChange={(event) => updateSetting("adblockUrl", event.target.value)} aria-label={t("set.adblockTargetLabel")} /></div>}
           </section>
+          <section className="win-settings-card">
+            <div className="setting-group"><FileDown size={13} /> Offline copy</div>
+            <div className="setting-action-row"><button className="outline-button" onClick={() => void downloadOfflineHtml()} disabled={offlineBusy}>{offlineBusy ? "Working…" : "Download as HTML file"}</button><span>Saves the whole OS into one HTML file you can open directly, no browser tab or internet needed.</span></div>
+            {offlineNote && <p className="term-error">{offlineNote}</p>}
+          </section>
         </>;
       case "about":
         return <>
@@ -6327,7 +6417,11 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(30);
-  const [volume, setVolume] = useState(0.82);
+  const [volume, setVolume] = useState<number>(() => {
+    const saved = storage.read<number>("cinefy-volume", 0.82);
+    return Number.isFinite(saved) ? Math.min(1, Math.max(0, saved)) : 0.82;
+  });
+  const [muted, setMuted] = useState<boolean>(() => Boolean(storage.read("cinefy-muted", false)));
   const [favorites, setFavorites] = useState<number[]>(() => storage.read("cinefy-favorites", []));
   const [trackCache, setTrackCache] = useState<TrackCache>(() => storage.read("cinefy-track-cache", {}));
   const [searchSource, setSearchSource] = useState<"tt" | "itunes" | "archive">("tt");
@@ -6359,7 +6453,7 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   const [splashPhase, setSplashPhase] = useState<"reveal" | "loading" | "done">("reveal");
   const [splashProgress, setSplashProgress] = useState(0);
   const [splashLine, setSplashLine] = useState(0);
-  const splashLoadMs = useRef(2000 + Math.random() * 900);
+  const splashLoadMs = useRef(900 + Math.random() * 400);
   const onTrackChangeRef = useRef(onTrackChange);
   onTrackChangeRef.current = onTrackChange;
   useEffect(() => () => { onTrackChangeRef.current(null); }, []);
@@ -6781,7 +6875,7 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.volume = volume;
+    audio.volume = muted ? 0 : volume;
     if (selected && audio.dataset.trackId !== String(selected.trackId)) {
       audio.dataset.trackId = String(selected.trackId);
       audio.src = selected.fullUrl || selected.previewUrl || "";
@@ -6797,7 +6891,10 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
     } else {
       audio.pause();
     }
-  }, [selected, playing, volume]);
+  }, [selected, playing, volume, muted]);
+
+  useEffect(() => { storage.write("cinefy-volume", volume); }, [volume]);
+  useEffect(() => { storage.write("cinefy-muted", muted); }, [muted]);
 
   useEffect(() => {
     if (!selected) { setLyrics([]); setLyricsFull(false); return; }
@@ -6888,6 +6985,12 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   const musicPlayRef = useRef(playing);
   musicSelRef.current = selected;
   musicPlayRef.current = playing;
+  const musicVolumeRef = useRef(volume);
+  const musicMutedRef = useRef(muted);
+  musicVolumeRef.current = volume;
+  musicMutedRef.current = muted;
+  const stepTrackRef = useRef(stepTrack);
+  stepTrackRef.current = stepTrack;
 
   useEffect(() => {
     if (!selected) {
@@ -6906,11 +7009,17 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
         get playing() { return musicPlayRef.current; },
         get progress() { return audioRef.current?.currentTime ?? 0; },
         get duration() { return audioRef.current?.duration ?? 0; },
+        get volume() { return musicVolumeRef.current; },
+        get muted() { return musicMutedRef.current; },
         onToggle: () => setPlaying((prev) => !prev),
         onSeek: (time: number) => {
           const audio = audioRef.current;
           if (audio) { audio.currentTime = time; setProgress(time); }
         },
+        onNext: () => stepTrackRef.current(1),
+        onPrev: () => stepTrackRef.current(-1),
+        onSetVolume: (v: number) => setVolume(Math.min(1, Math.max(0, v))),
+        onToggleMute: () => setMuted((m) => !m),
         onClose: () => { setPlaying(false); setSelected(null); onTrackChange(null); },
       };
       musicSessionRef.current = session;
@@ -6918,13 +7027,44 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
     } else {
       notifyMediaSession();
     }
-  }, [selected, playing]);
+  }, [selected, playing, volume, muted]);
 
   useEffect(() => () => {
     const session = musicSessionRef.current;
     if (session && getMediaSession() === session) setMediaSession(null);
     musicSessionRef.current = null;
   }, []);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    if (!selected) { try { ms.metadata = null; ms.playbackState = "none"; } catch { /* noop */ } return; }
+    try {
+      ms.metadata = new MediaMetadata({
+        title: selected.trackName,
+        artist: selected.artistName,
+        album: selected.primaryGenreName || "Spicetify",
+        artwork: selected.artworkUrl100 ? [{ src: selected.artworkUrl100 }] : [],
+      });
+    } catch { /* noop */ }
+    const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
+      ["play", () => setPlaying(true)],
+      ["pause", () => setPlaying(false)],
+      ["previoustrack", () => stepTrackRef.current(-1)],
+      ["nexttrack", () => stepTrackRef.current(1)],
+      ["seekto", (details) => {
+        const audio = audioRef.current;
+        if (audio && typeof details.seekTime === "number") { audio.currentTime = details.seekTime; setProgress(details.seekTime); }
+      }],
+    ];
+    for (const [action, handler] of handlers) { try { ms.setActionHandler(action, handler); } catch { /* unsupported action */ } }
+    return () => { for (const [action] of handlers) { try { ms.setActionHandler(action, null); } catch { /* noop */ } } };
+  }, [selected]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    try { navigator.mediaSession.playbackState = playing ? "playing" : "paused"; } catch { /* noop */ }
+  }, [playing]);
 
   function previewLyrics(artist: string, title: string): string[] {
     const words = title.replace(/[^a-zA-Z0-9 ]/g, "").trim().split(/\s+/).filter(Boolean).slice(0, 4).join(" ");
@@ -6950,7 +7090,7 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   useEffect(() => {
     if (!splash) return;
     if (splashPhase === "reveal") {
-      const reveal = window.setTimeout(() => setSplashPhase("loading"), 1500);
+      const reveal = window.setTimeout(() => setSplashPhase("loading"), 550);
       return () => window.clearTimeout(reveal);
     }
     if (splashPhase === "loading") {
@@ -6963,7 +7103,7 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
       return () => { window.clearInterval(bar); window.clearInterval(lineTimer); };
     }
     if (splashPhase === "done") {
-      const done = window.setTimeout(() => setSplash(false), 700);
+      const done = window.setTimeout(() => setSplash(false), 380);
       return () => window.clearTimeout(done);
     }
     return undefined;
@@ -6972,6 +7112,12 @@ function CinefySurface({ onClose, onMinimize, onTrackChange }: { onClose: () => 
   useEffect(() => {
     if (splash && splashPhase === "loading" && splashProgress >= 100) setSplashPhase("done");
   }, [splash, splashPhase, splashProgress]);
+
+  useEffect(() => {
+    if (!splash) return;
+    const failsafe = window.setTimeout(() => { setSplashProgress(100); setSplashPhase("done"); }, 2600);
+    return () => window.clearTimeout(failsafe);
+  }, [splash]);
 
   function showNotification(track: CinefyTrack) {
     window.clearTimeout(notifTimer.current);

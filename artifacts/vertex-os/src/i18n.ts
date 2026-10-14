@@ -2889,7 +2889,15 @@ function pluralForm(lang: Lang, n: number): "one" | "few" | "other" {
 
 export function tp(key: string, n: number): string {
   const form = pluralForm(LANG, n);
+  const suffix = form === "one" ? "One" : form === "few" ? "Few" : "Other";
   const dict = dictionaries[LANG];
-  const val = dict[`${key}.${form}`] ?? dict[`${key}.other`] ?? dictionaries.en[`${key}.other`] ?? t(key);
+  const val =
+    dict[`${key}${suffix}`] ??
+    dict[`${key}Other`] ??
+    dict[key] ??
+    dictionaries.en[`${key}${suffix}`] ??
+    dictionaries.en[`${key}Other`] ??
+    dictionaries.en[key] ??
+    key;
   return val.replace("{n}", String(n));
 }

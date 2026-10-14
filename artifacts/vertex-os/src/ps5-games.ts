@@ -3,11 +3,13 @@ export interface Ps5Game {
   name: string;
   cover: string;
   play: string;
+  /** Route through the scramjet proxy (bypasses X-Frame-Options/CSP) and strip ads. */
+  proxy?: boolean;
 }
 
 export const PS5_GAMES: readonly Ps5Game[] = [
   {"id":"n2","name":"Geometry Dash (Nebula)","cover":"https://cdn.jsdelivr.net/gh/bestsabplayerox/covers@main//27.png","play":"https://sealgodreal.github.io/nebulagames/1/index.html"},
-  {"id":"z0","name":"Bowmasters","cover":"https://cdn.jsdelivr.net/gh/bestsabplayerox/covers@main//0.png","play":"https://cdn.jsdelivr.net/gh/bestsabplayerox/html@master//0.html"},
+  {"id":"z0","name":"Bowmasters","cover":"https://cdn.jsdelivr.net/gh/bestsabplayerox/covers@main//0.png","play":`${import.meta.env.BASE_URL}games/bowmasters.html`},
   {"id":"z1","name":"OvO","cover":"https://cdn.jsdelivr.net/gh/bestsabplayerox/covers@main//1.png","play":"https://cdn.jsdelivr.net/gh/bestsabplayerox/html@master//1-fde.html"},
   {"id":"z2","name":"OvO 2","cover":"https://cdn.jsdelivr.net/gh/bestsabplayerox/covers@main//2.png","play":"https://sealgodreal.github.io/nebulagames/43/index.html#goog_rewarded"},
   {"id":"z3","name":"OvO 3 Dimensions","cover":"https://cdn.jsdelivr.net/gh/bestsabplayerox/covers@main//3.png","play":"https://cdn.jsdelivr.net/gh/bestsabplayerox/html@master//3.html"},
@@ -898,7 +900,8 @@ export const PS5_GAMES: readonly Ps5Game[] = [
   {"id":"n325","name":"Sprinter","cover":"https://cdn.jsdelivr.net/gh/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/images/176.jpg","play":"https://noahsamazingtutoringhelp.github.io/sprinter/"},
   {"id":"n333","name":"Monkey Mart","cover":"https://cdn.jsdelivr.net/gh/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/images/184.jpg","play":"https://cdn.jsdelivr.net/gh/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor@master/games/175.html"},
   {"id":"n334","name":"Thorns and Balloons","cover":"https://cdn.jsdelivr.net/gh/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/images/144.jpg","play":"https://noahsamazingtutoringhelp.github.io/ScienceStudyBuddy/"},
-  {"id":"er3","name":"Escape Road 3","cover":"https://pizzaedition.com/apnggames/escaperoad3.png","play":"https://pizzaedition.com/embed/escaperoad3"}
+  {"id":"er3","name":"Escape Road 3","cover":"https://pizzaedition.com/apnggames/escaperoad3.png","play":"https://pizzaedition.com/embed/escaperoad3"},
+  {"id":"gta5","name":"Grand Theft Auto V (GTA 5)","cover":"https://upload.wikimedia.org/wikipedia/en/a/a5/Grand_Theft_Auto_V.png","play":"https://gta.deloskiyt.pl/","proxy":true}
 ];
 
 export const PS5_TOTAL = PS5_GAMES.length;

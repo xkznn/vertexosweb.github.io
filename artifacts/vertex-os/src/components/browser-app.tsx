@@ -123,40 +123,69 @@ function normalizeHeaders(raw: unknown): RawHeaderPair[] {
 /** Build a proxy transport for the chosen backend. Falls back to libcurl if
  *  the Epoxy runtime cannot be loaded for any reason. The returned transport is
  *  initialised and has its response headers normalised for scramjet. */
-async function createTransport(kind: BrowserTransportId, wispUrl: string): Promise<ProxyTransportLike> {
+async function instantiateTransport(kind: BrowserTransportId, wispUrl: string): Promise<ProxyTransportLike> {
   let transport: ProxyTransportLike;
   if (kind === "epoxy") {
-    try {
-      const mod = (await import("@mercuryworkshop/epoxy-transport")) as unknown as {
-        default?: new (opts: { wisp: string }) => ProxyTransportLike;
-      };
-      if (!mod.default) throw new Error("epoxy-transport missing default export");
-      transport = new mod.default({ wisp: wispUrl });
-    } catch {
-      const { default: LibcurlClient } = await import("@mercuryworkshop/libcurl-transport");
-      transport = new LibcurlClient({ wisp: wispUrl }) as unknown as ProxyTransportLike;
-    }
+    const mod = (await import("@mercuryworkshop/epoxy-transport")) as unknown as {
+      default?: new (opts: { wisp: string }) => ProxyTransportLike;
+    };
+    if (!mod.default) throw new Error("epoxy-transport missing default export");
+    transport = new mod.default({ wisp: wispUrl });
   } else {
     const { default: LibcurlClient } = await import("@mercuryworkshop/libcurl-transport");
     transport = new LibcurlClient({ wisp: wispUrl }) as unknown as ProxyTransportLike;
   }
-
   try {
     if (typeof transport.init === "function") await transport.init();
   } catch {
     /* some transports initialise lazily */
   }
+  return transport;
+}
 
-  const originalRequest = transport.request.bind(transport);
-  const wrapped = Object.create(transport) as ProxyTransportLike;
-  wrapped.request = async (remote, method, body, headers, signal) => {
-    const response = await originalRequest(remote, method, body, headers, signal);
-    try {
-      response.headers = normalizeHeaders(response.headers);
-    } catch {
-      /* headers not writable — leave as-is */
+async function runTransportRequest(
+  transport: ProxyTransportLike,
+  remote: URL,
+  method: string,
+  body: unknown,
+  headers: RawHeaderPair[],
+  signal?: AbortSignal,
+): Promise<TransportResponse> {
+  const response = await transport.request(remote, method, body, headers, signal);
+  try {
+    response.headers = normalizeHeaders(response.headers);
+  } catch {
+    /* headers not writable — leave as-is */
+  }
+  return response;
+}
+
+async function createTransport(kind: BrowserTransportId, wispUrl: string): Promise<ProxyTransportLike> {
+  let primary: ProxyTransportLike;
+  try {
+    primary = await instantiateTransport(kind, wispUrl);
+  } catch {
+    primary = await instantiateTransport("libcurl", wispUrl);
+  }
+
+  const fallbackKind: BrowserTransportId = kind === "epoxy" ? "libcurl" : "epoxy";
+  let fallbackPromise: Promise<ProxyTransportLike | null> | null = null;
+  const getFallback = () => {
+    if (!fallbackPromise) {
+      fallbackPromise = instantiateTransport(fallbackKind, wispUrl).catch(() => null);
     }
-    return response;
+    return fallbackPromise;
+  };
+
+  const wrapped = Object.create(primary) as ProxyTransportLike;
+  wrapped.request = async (remote, method, body, headers, signal) => {
+    try {
+      return await runTransportRequest(primary, remote, method, body, headers, signal);
+    } catch (error) {
+      const fallback = await getFallback();
+      if (!fallback) throw error;
+      return runTransportRequest(fallback, remote, method, body, headers, signal);
+    }
   };
   return wrapped;
 }
@@ -497,13 +526,30 @@ function ProxyBrowser(_props: { home?: boolean }) {
   );
 }
 
-export function BrowserSurface(_props: { lang: Lang }) {
+export function BrowserSurface(_props: { lang?: Lang }) {
   return <ProxyBrowser home />;
 }
 
+/** Best-effort ad removal for same-origin (scramjet-proxied) frames. */
+function adBlockPurge(doc: Document): void {
+  try {
+    doc
+      .querySelectorAll(
+        'ins.adsbygoogle, .adsbygoogle, [id^="google_ads"], [id^="aswift"], [id^="ad_"], ' +
+          '[id*="banner-ad"], [class*="adsbygoogle"], [class*="advert"], [data-ad-slot], ' +
+          'iframe[src*="doubleclick.net"], iframe[src*="googlesyndication.com"], ' +
+          'iframe[src*="adservice"], iframe[src*="googleadservices"], iframe[src*="/ads/"]',
+      )
+      .forEach((node) => node.remove());
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Full-bleed proxied site with no chrome. Used when a page refuses to be
- *  framed (X-Frame-Options / CSP) — the scramjet proxy loads it anyway. */
-export function ProxyUrlFrame({ url, title = "Proxied page" }: { url: string; title?: string }) {
+ *  framed (X-Frame-Options / CSP) — the scramjet proxy loads it anyway.
+ *  Set `blockAds` to strip common ad slots from the (same-origin) proxied page. */
+export function ProxyUrlFrame({ url, title = "Proxied page", blockAds = false }: { url: string; title?: string; blockAds?: boolean }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [status, setStatus] = useState<"booting" | "ready">("booting");
   const [error, setError] = useState<string | null>(null);
@@ -514,6 +560,7 @@ export function ProxyUrlFrame({ url, title = "Proxied page" }: { url: string; ti
     const el = iframeRef.current;
     if (!el) return;
     let cancelled = false;
+    let adTimer: number | undefined;
 
     (async () => {
       try {
@@ -532,6 +579,16 @@ export function ProxyUrlFrame({ url, title = "Proxied page" }: { url: string; ti
         const frame = controller.createFrame(el, { plugins: [] });
         frame.go(urlRef.current);
         setStatus("ready");
+        if (blockAds) {
+          adTimer = window.setInterval(() => {
+            try {
+              const doc = el.contentDocument;
+              if (doc) adBlockPurge(doc);
+            } catch {
+              /* cross-origin or torn down */
+            }
+          }, 700);
+        }
       } catch (cause) {
         if (cancelled) return;
         setError(cause instanceof Error ? cause.message : String(cause));
@@ -541,8 +598,9 @@ export function ProxyUrlFrame({ url, title = "Proxied page" }: { url: string; ti
 
     return () => {
       cancelled = true;
+      if (adTimer) window.clearInterval(adTimer);
     };
-  }, [attempt]);
+  }, [attempt, blockAds]);
 
   return (
     <div className="proxy-url-frame">

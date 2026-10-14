@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
+  adminOwnerActive,
+  loadUserProfile,
+  saveProfilePage as netSaveProfilePage,
   answerCall,
   callsReady,
   connect,
@@ -27,14 +30,32 @@ import {
   setProfile as netSetProfile,
   unsendMessage as netUnsendMessage,
   messagesBackendConfigured,
+  authSignIn,
+  authSignUp,
+  authSignOut,
+  loadMyProfileRow,
+  setRole as netSetRole,
+  setVerified as netSetVerified,
+  setEffects as netSetEffects,
+  persistRole as netPersistRole,
+  persistVerified as netPersistVerified,
+  persistEffects as netPersistEffects,
+  persistBadges as netPersistBadges,
+  changeUsername as netChangeUsername,
+  followUser,
+  unfollowUser,
+  loadFollowList,
   type NetGroup,
+  type NetUserPage,
+  type NetFollowUser,
   type NetRequest,
   type NetProfile,
   type NetStatus,
 } from "./vertexnet";
+import { assetUrl } from "./asset-map";
 
 const base = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
-const SITE_LOGO = `${base}${new Date().getMonth() === 9 ? "vertex-hub-logo-halloween.png" : "vertex-hub-logo.png"}`;
+const SITE_LOGO = assetUrl(base, new Date().getMonth() === 9 ? "vertex-hub-logo-halloween.png" : "vertex-hub-logo.png");
 
 const PROF_KEY = "vertex-msgs-profile-v2";
 const DMS_KEY = "vertex-msgs-dms-v3";
@@ -44,6 +65,7 @@ const CUSTOMS_KEY = "vertex-msgs-customs-v1";
 const ACTIVE_KEY = "vertex-msgs-active-v1";
 
 type Status = "online" | "idle" | "offline";
+type Role = "user" | "moderator" | "owner";
 type AvSource = { kind: "preset"; id: number } | { kind: "custom"; data: string };
 
 interface Profile {
@@ -51,6 +73,13 @@ interface Profile {
   name: string;
   avatar: AvSource;
   status: Status;
+  role?: Role;
+  verified?: boolean;
+  effects?: string[];
+  badges?: string[] | null;
+  bio?: string;
+  banner?: string;
+  joinedAt?: number;
 }
 
 interface MediaItem {
@@ -80,11 +109,19 @@ interface RosterUser {
   preset: number;
   system?: boolean;
   verified?: boolean;
+  effects?: string[];
+  badges?: string[] | null;
   live?: boolean;
   status?: Status;
   avatar?: AvSource;
   group?: boolean;
   members?: string[];
+  role?: Role;
+  bio?: string;
+  banner?: string;
+  joinedAt?: number;
+  contacts?: number;
+  groups?: number;
 }
 
 interface CallState {
@@ -114,15 +151,76 @@ const PRESETS: { a: string; b: string; glyph: string }[] = [
 
 const hashPreset = (u: string) => [...u].reduce((s, ch) => (s * 31 + (ch.codePointAt(0) ?? 0)) >>> 0, 0) % PRESETS.length;
 const nameCap = (u: string) => u.replace(/^[a-z]/, (c) => c.toUpperCase());
+const fmtJoin = (ts: number) => {
+  const d = new Date(ts);
+  return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+};
+const fmtJoinLong = (ts: number) => {
+  const d = new Date(ts);
+  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  return `Joined ${months[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+const EFFECTS: { id: string; label: string }[] = [
+  { id: "moving-name", label: "Moving name" },
+  { id: "glow", label: "Glow" },
+];
+const nameFxClass = (effects?: string[]) => {
+  if (!effects || effects.length === 0) return "";
+  const cls: string[] = [];
+  if (effects.includes("moving-name")) cls.push("msgs-name-moving");
+  if (effects.includes("glow")) cls.push("msgs-name-glow");
+  return cls.length ? ` ${cls.join(" ")}` : "";
+};
+
+type BadgeId = "owner" | "admin" | "dev" | "mod" | "experimental" | "lab" | "verified";
+const BADGES: { id: BadgeId; label: string; cls: string; title: string }[] = [
+  { id: "owner", label: "OWNER", cls: "msgs-role-owner", title: "Owner" },
+  { id: "admin", label: "ADMIN", cls: "msgs-role-admin", title: "Administrator" },
+  { id: "dev", label: "DEVELOPER", cls: "msgs-role-dev", title: "Developer" },
+  { id: "mod", label: "MOD", cls: "msgs-role-mod", title: "Moderator" },
+  { id: "experimental", label: "EXPERIMENTAL", cls: "msgs-role-experimental", title: "Experimental Features Lab" },
+  { id: "lab", label: "LAB", cls: "msgs-role-lab", title: "Vertex Lab" },
+  { id: "verified", label: "Verified", cls: "", title: "Verified" },
+];
+const ALL_BADGE_IDS = BADGES.map((b) => b.id);
+
+const defaultBadges = (o: { role?: Role; special?: boolean; verified?: boolean }): BadgeId[] => {
+  const ids: BadgeId[] = [];
+  if (o.special) ids.push("mod", "admin", "dev");
+  if (o.role === "owner") ids.push("owner");
+  else if (o.role === "moderator" && !o.special) ids.push("mod");
+  if (o.role === "owner") ids.push("experimental", "lab");
+  if (o.verified) ids.push("verified");
+  return ids;
+};
+
+const LAB_KEY = "vertex-lab-v1";
+type LabState = { anim: boolean; cozy: boolean; redesign: boolean; compact: boolean };
+const DEFAULT_LAB: LabState = { anim: false, cozy: false, redesign: false, compact: false };
+const readLab = (): LabState => {
+  try {
+    const r = localStorage.getItem(LAB_KEY);
+    if (!r) return { ...DEFAULT_LAB };
+    return { ...DEFAULT_LAB, ...(JSON.parse(r) as Partial<LabState>) };
+  } catch {
+    return { ...DEFAULT_LAB };
+  }
+};
 
 const SYSTEM_USER: RosterUser = { username: "Vertex", name: "Vertex", preset: -1, system: true, verified: true };
 
 const toNetProfile = (p: Profile): NetProfile => ({
-  username: p.username.toLowerCase(),
+  username: p.username,
   name: p.name,
   status: p.status,
-  avatarKind: p.avatar.kind,
-  avatarId: p.avatar.kind === "preset" ? p.avatar.id : hashPreset(p.username),
+  avatarKind: p.avatar.kind === "preset" ? "preset" : "custom",
+  avatarId: p.avatar.kind === "preset" ? p.avatar.id : 0,
+  ...(p.avatar.kind === "custom" && p.avatar.data ? { avatarData: p.avatar.data } : {}),
+  role: p.role,
+  verified: p.verified,
+  effects: p.effects,
+  badges: p.badges,
 });
 
 const fromNetProfile = (n: NetProfile): RosterUser => ({
@@ -131,6 +229,10 @@ const fromNetProfile = (n: NetProfile): RosterUser => ({
   preset: n.avatarKind === "custom" ? hashPreset(n.username) : n.avatarId,
   live: n.status !== "offline",
   status: n.status,
+  role: n.role,
+  verified: n.verified,
+  effects: n.effects,
+  badges: n.badges,
   ...(n.avatarKind === "custom" && n.avatarData ? { avatar: { kind: "custom" as const, data: n.avatarData } } : {}),
 });
 
@@ -149,6 +251,16 @@ const write = (k: string, v: unknown) => {
   } catch {
     /* noop */
   }
+};
+
+const PAGE_KEY = "vertex-msgs-page-v1";
+interface PageOverride { bio?: string; banner?: string; avatar?: AvSource; joinedAt?: number | null; role?: Role; verified?: boolean; effects?: string[]; badges?: string[] | null; }
+const readPageOverrides = (): Record<string, PageOverride> => read<Record<string, PageOverride>>(PAGE_KEY, {});
+const pageOverrideFor = (username: string): PageOverride | undefined => readPageOverrides()[username.trim().toLowerCase()];
+const writePageOverride = (username: string, data: PageOverride) => {
+  const all = readPageOverrides();
+  all[username.trim().toLowerCase()] = { ...all[username.trim().toLowerCase()], ...data };
+  write(PAGE_KEY, all);
 };
 
 const regRead = (): string[] => {
@@ -209,6 +321,23 @@ function initialState() {
   };
 }
 
+function RoleBadge({ role, compact = false }: { role?: Role; compact?: boolean }) {
+  if (!role || role === "user") return null;
+  const owner = role === "owner";
+  return (
+    <span className={`msgs-role msgs-role-${role}${compact ? " msgs-role-compact" : ""}`} title={owner ? "Owner" : "Moderator"}>
+      <svg viewBox="0 0 24 24" width={compact ? 10 : 12} height={compact ? 10 : 12} aria-hidden="true">
+        {owner ? (
+          <path d="M3 8l4 3 5-6 5 6 4-3-2 11H5L3 8z" fill="currentColor" />
+        ) : (
+          <path d="M12 2l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V5l7-3z" fill="currentColor" />
+        )}
+      </svg>
+      {!compact && <span>{owner ? "OWNER" : "MOD"}</span>}
+    </span>
+  );
+}
+
 function VerifiedBadge({ size = 15 }: { size?: number }) {
   return (
     <span className="msgs-verified" style={{ width: size, height: size }}>
@@ -217,6 +346,24 @@ function VerifiedBadge({ size = 15 }: { size?: number }) {
       </svg>
     </span>
   );
+}
+
+const badgeChip = (id: BadgeId, keyPrefix = "") => {
+  const meta = BADGES.find((b) => b.id === id);
+  if (!meta) return null;
+  const key = `${keyPrefix}${id}`;
+  if (id === "verified") return <span key={key} className="msgs-profile-verifiedchip"><VerifiedBadge size={14} />Verified</span>;
+  return <span key={key} className={`msgs-role ${meta.cls}`} title={meta.title}>{meta.label}</span>;
+};
+
+const renderBadges = (ids: BadgeId[], keyPrefix = "") => ids.map((id) => badgeChip(id, keyPrefix));
+
+function initialsFor(username: string): string {
+  const clean = (username ?? "").replace(/[^a-zA-Z0-9]+/g, " ").trim();
+  if (!clean) return "?";
+  const parts = clean.split(/\s+/);
+  const raw = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : clean.slice(0, 2);
+  return raw.toUpperCase();
 }
 
 function GlyphAvatar({ src, size, username, verified, status, statusSize, className }: {
@@ -228,16 +375,21 @@ function GlyphAvatar({ src, size, username, verified, status, statusSize, classN
   statusSize?: number;
   className?: string;
 }) {
+  const [failed, setFailed] = useState(false);
   const isPreset = src.kind === "preset" && src.id >= 0;
   const preset = isPreset ? PRESETS[src.id] : null;
+  const imgSrc = src.kind === "custom" ? src.data : SITE_LOGO;
+  const showImage = !isPreset && !!imgSrc && !failed;
   return (
     <span className={`msgs-avatar ${className ?? ""}`} style={{ width: size, height: size, fontSize: Math.round(size * 0.46) }}>
       {isPreset ? (
         <span className="msgs-avatar-preset" style={{ background: `linear-gradient(135deg, ${preset!.a}, ${preset!.b})` }}>
           {preset!.glyph}
         </span>
+      ) : showImage ? (
+        <img className="msgs-avatar-img" src={imgSrc} alt={username} onError={() => setFailed(true)} />
       ) : (
-        <img className="msgs-avatar-img" src={src.kind === "custom" ? src.data : SITE_LOGO} alt={username} />
+        <span className="msgs-avatar-fallback">{initialsFor(username)}</span>
       )}
       {verified && <VerifiedBadge />}
       {status && <span className={`msgs-status-dot msgs-status-${status}`} style={statusSize ? { width: statusSize, height: statusSize } : undefined} />}
@@ -322,10 +474,145 @@ interface RequestItem {
   at: number;
 }
 
-function SetupModal({ onDone, live }: { onDone: (p: Profile) => void; live: string[] }) {
+const AUTH_CSS = `
+.msgs-auth{text-align:center}
+.msgs-auth-brand{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:4px}
+.msgs-auth-brand img{width:52px;height:52px;object-fit:contain}
+.msgs-auth-tabs{display:flex;gap:6px;background:rgba(255,255,255,.07);border-radius:12px;padding:4px;margin:8px 0 16px}
+.msgs-auth-tabs button{flex:1;border:0;background:transparent;color:inherit;opacity:.6;font-weight:600;padding:9px 8px;border-radius:9px;cursor:pointer;font-size:13px}
+.msgs-auth-tabs button.on{background:rgba(255,255,255,.16);opacity:1}
+.msgs-auth-form{display:flex;flex-direction:column;gap:12px;text-align:left}
+.msgs-auth-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;opacity:.85}
+.msgs-auth-form input{width:100%;padding:11px 12px;border-radius:11px;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.25);color:inherit;font-size:14px;outline:none;box-sizing:border-box}
+.msgs-auth-form input:focus{border-color:#3b82f6}
+.msgs-auth-pass{position:relative;display:flex;align-items:center}
+.msgs-auth-pass button{position:absolute;right:8px;border:0;background:transparent;color:inherit;opacity:.6;font-size:12px;cursor:pointer;font-weight:600}
+.msgs-auth-note{font-size:12px;opacity:.9;margin:0;color:#7dd3fc}
+.msgs-auth-foot{margin:14px 0 0;font-size:12.5px;opacity:.75}
+.msgs-auth-foot button{border:0;background:transparent;color:#60a5fa;font-weight:700;cursor:pointer;font-size:12.5px}
+`;
+
+function AuthModal({ onDone, live }: { onDone: (p: Profile) => void; live: string[] }) {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  const [awaitProfile, setAwaitProfile] = useState(false);
+  const [pendingName, setPendingName] = useState("");
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setErr(null);
+    setNote(null);
+    const name = username.trim().toLowerCase();
+    if (!/^[a-z0-9_]{2,16}$/.test(name)) {
+      setErr("Use 2-16 letters, numbers or underscores.");
+      return;
+    }
+    if (password.length < 6) {
+      setErr("Password must be at least 6 characters.");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (mode === "signup") {
+        const res = await authSignUp(name, password);
+        if (!res.ok) {
+          if (res.needsConfirm) {
+            setNote(res.error ?? "Confirm your account, then sign in.");
+            setMode("signin");
+          } else {
+            setErr(res.error ?? "Could not create your account.");
+          }
+          return;
+        }
+        setPendingName(name);
+        setAwaitProfile(true);
+        return;
+      }
+      const res = await authSignIn(name, password);
+      if (!res.ok) {
+        setErr(res.error ?? "Could not sign in.");
+        return;
+      }
+      const row = await loadMyProfileRow();
+      if (row) {
+        onDone({
+          username: row.username,
+          name: row.name || nameCap(row.username),
+          avatar: { kind: "preset", id: row.avatarKind === "custom" ? hashPreset(row.username) : row.avatarId },
+          status: row.status,
+          role: row.role,
+        });
+      } else {
+        setPendingName(name);
+        setAwaitProfile(true);
+      }
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (awaitProfile) return <SetupModal onDone={onDone} live={live} initialUsername={pendingName} />;
+
+  return (
+    <div className="msgs-modal-overlay">
+      <div className="msgs-setup msgs-auth">
+        <style>{AUTH_CSS}</style>
+        <div className="msgs-auth-brand">
+          <img src={SITE_LOGO} alt="Vertex" />
+          <h2 className="msgs-setup-h">MESSAGES</h2>
+          <h3 className="msgs-setup-sub">Sign in to chat with real accounts</h3>
+        </div>
+        <div className="msgs-auth-tabs">
+          <button type="button" className={mode === "signin" ? "on" : ""} onClick={() => { setMode("signin"); setErr(null); setNote(null); }}>Sign in</button>
+          <button type="button" className={mode === "signup" ? "on" : ""} onClick={() => { setMode("signup"); setErr(null); setNote(null); }}>Create account</button>
+        </div>
+        <form className="msgs-auth-form" onSubmit={submit}>
+          <label>
+            <span>Username</span>
+            <input type="text" autoComplete="username" value={username} maxLength={16} onChange={(e) => { setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "")); setErr(null); }} placeholder="username" autoFocus />
+          </label>
+          <label>
+            <span>Password</span>
+            <div className="msgs-auth-pass">
+              <input
+                type={showPass ? "text" : "password"}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setErr(null); }}
+                placeholder="At least 6 characters"
+              />
+              <button type="button" onClick={() => setShowPass((v) => !v)}>{showPass ? "Hide" : "Show"}</button>
+            </div>
+          </label>
+          {note && <p className="msgs-auth-note">{note}</p>}
+          {err && <p className="msgs-setup-err">{err}</p>}
+          <button type="submit" className="msgs-setup-next" disabled={busy}>
+            {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
+          </button>
+        </form>
+        <p className="msgs-auth-foot">
+          {mode === "signup" ? "Already have an account? " : "New to Messages? "}
+          <button type="button" onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setErr(null); setNote(null); }}>
+            {mode === "signup" ? "Sign in" : "Create account"}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SetupModal({ onDone, live, initialUsername }: { onDone: (p: Profile) => void; live: string[]; initialUsername?: string }) {
   const [step, setStep] = useState(0);
   const [avatar, setAvatar] = useState<AvSource>({ kind: "preset", id: 7 });
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(initialUsername ?? "");
   const [status, setStatus] = useState<Status>("online");
   const [usernameErr, setUsernameErr] = useState<string | null>(null);
   const [avatarErr, setAvatarErr] = useState<string | null>(null);
@@ -375,7 +662,7 @@ function SetupModal({ onDone, live }: { onDone: (p: Profile) => void; live: stri
   };
 
   const next = () => {
-    if (step === 1) {
+    if (step === 1 && !initialUsername) {
       const err = validateUsername(username);
       if (err) {
         setUsernameErr(err);
@@ -448,14 +735,15 @@ function SetupModal({ onDone, live }: { onDone: (p: Profile) => void; live: stri
                 <GlyphAvatar src={avatar} size={54} username={username || "you"} status={status} statusSize={13} />
               </div>
               <h2 className="msgs-setup-h">SETUP PROFILE</h2>
-              <h3 className="msgs-setup-sub">Pick your username</h3>
-              <p className="msgs-setup-tip">Roll a unique one or type your own. Taken names can't be reused.</p>
+              <h3 className="msgs-setup-sub">{initialUsername ? "Your username" : "Pick your username"}</h3>
+              <p className="msgs-setup-tip">{initialUsername ? "This is the name you log in with." : "Roll a unique one or type your own. Taken names can't be reused."}</p>
               <div className={`msgs-setup-user ${usernameErr ? "msgs-setup-user-err" : ""}`}>
                 <span className="msgs-at">@</span>
                 <input
                   value={username}
                   maxLength={16}
                   autoFocus
+                  readOnly={Boolean(initialUsername)}
                   spellCheck={false}
                   onChange={(e) => {
                     setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""));
@@ -464,16 +752,20 @@ function SetupModal({ onDone, live }: { onDone: (p: Profile) => void; live: stri
                   onKeyDown={(e) => e.key === "Enter" && next()}
                   placeholder="username"
                 />
-                <button type="button" className="msgs-roll" onClick={roll} title="Roll a unique username">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 12a9 9 0 1 1-2.64-6.36" strokeLinecap="round" />
-                    <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  Roll
-                </button>
+                {!initialUsername && (
+                  <button type="button" className="msgs-roll" onClick={roll} title="Roll a unique username">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12a9 9 0 1 1-2.64-6.36" strokeLinecap="round" />
+                      <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Roll
+                  </button>
+                )}
               </div>
               {usernameErr ? (
                 <p className="msgs-setup-err">{usernameErr}</p>
+              ) : initialUsername ? (
+                <p className="msgs-setup-ok">@{username} — this is your login name</p>
               ) : (
                 username && <p className="msgs-setup-ok">@{username} is available</p>
               )}
@@ -1212,6 +1504,872 @@ function CallOverlay({ call, onEnd, onActive, resolve }: {
   );
 }
 
+function fmtBig(n: number): string {
+  const v = Number.isFinite(n) ? Math.max(0, n) : 0;
+  if (v < 1000) return String(Math.floor(v));
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(v).replace(/\.0$/, "");
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("That image could not be loaded."));
+    img.src = url;
+  });
+}
+
+async function cropToRatio(dataUrl: string, ratio: number): Promise<string> {
+  try {
+    const img = await loadImage(dataUrl);
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (!w || !h) return dataUrl;
+    let cw = w;
+    let ch = h;
+    const target = w / h;
+    if (Math.abs(target - ratio) > 0.02) {
+      if (target > ratio) cw = Math.max(1, Math.round(h * ratio));
+      else ch = Math.max(1, Math.round(w / ratio));
+    }
+    const sx = Math.round((w - cw) / 2);
+    const sy = Math.round((h - ch) / 2);
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, sx, sy, cw, ch, 0, 0, cw, ch);
+    return canvas.toDataURL("image/jpeg", 0.85);
+  } catch {
+    return dataUrl;
+  }
+}
+
+function InfoModal({ title, lines, onClose }: { title: string; lines: string[]; onClose: () => void }) {
+  return (
+    <div className="msgs-info-overlay" onClick={onClose}>
+      <div className="msgs-info-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
+        <header className="msgs-info-head">
+          <h3>{title}</h3>
+          <button type="button" className="msgs-info-close" onClick={onClose} aria-label="Close">✕</button>
+        </header>
+        <ul>
+          {lines.map((line) => <li key={line}>{line}</li>)}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function SwitchButton({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      className={`msgs-settings-switch${on ? " on" : ""}`}
+      onClick={onToggle}
+    >
+      <span className="msgs-settings-knob" />
+    </button>
+  );
+}
+
+function SettingsPanel({ profile, notifOn, onNotif, enterSends, onEnterSends, onBack, onOpenProfile, onEditProfile, onSignOut, onInfo, isOwner, onLab }: {
+  profile: Profile;
+  notifOn: boolean;
+  onNotif: (v: boolean) => void;
+  enterSends: boolean;
+  onEnterSends: (v: boolean) => void;
+  onBack: () => void;
+  onOpenProfile: () => void;
+  onEditProfile: () => void;
+  onSignOut: () => void;
+  onInfo: (title: string, lines: string[]) => void;
+  isOwner: boolean;
+  onLab: () => void;
+}) {
+  return (
+    <div className="msgs-panel msgs-settings">
+      <header className="msgs-panel-head">
+        <button type="button" className="msgs-panel-back" onClick={onBack} aria-label="Back">‹</button>
+        <span className="msgs-panel-title">Settings</span>
+      </header>
+      <div className="msgs-panel-scroll msgs-settings-body">
+        <button type="button" className="msgs-settings-account" onClick={onOpenProfile}>
+          <GlyphAvatar src={profile.avatar} size={58} username={profile.username} verified={profile.verified} status={profile.status} statusSize={16} />
+          <span className="msgs-settings-account-meta">
+            <span className={`msgs-settings-name${nameFxClass(profile.effects)}`}>
+              {profile.name}
+              <RoleBadge role={profile.role} />
+              {profile.verified && <VerifiedBadge />}
+            </span>
+            <small>@{profile.username}</small>
+          </span>
+          <span className="msgs-settings-arrow">›</span>
+        </button>
+
+        <div className="msgs-settings-group">
+          <div className="msgs-settings-label">Account</div>
+          <div className="msgs-settings-section">
+            <button type="button" className="msgs-settings-row" onClick={onEditProfile}>
+              <span className="msgs-settings-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="12" cy="8" r="4" /><path d="M4 20v-1a8 8 0 0 1 16 0v1" strokeLinecap="round" /></svg>
+              </span>
+              <span className="msgs-settings-row-meta">
+                <strong>Edit profile</strong>
+                <small>Name, avatar, banner and bio</small>
+              </span>
+              <span className="msgs-settings-arrow">›</span>
+            </button>
+          </div>
+        </div>
+
+        {isOwner && (
+          <div className="msgs-settings-group">
+            <div className="msgs-settings-label">Experimental</div>
+            <div className="msgs-settings-section">
+              <button type="button" className="msgs-settings-row" onClick={onLab}>
+                <span className="msgs-settings-icon msgs-settings-icon-lab">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M9 3h6M10 3v5.1L4.6 17a3 3 0 0 0 2.6 4.5h9.6a3 3 0 0 0 2.6-4.5L14 8.1V3" strokeLinecap="round" strokeLinejoin="round" /><path d="M7.2 14h9.6" strokeLinecap="round" /></svg>
+                </span>
+                <span className="msgs-settings-row-meta">
+                  <strong>Experimental Features Lab</strong>
+                  <small>Hidden prototypes, badges & unreleased features</small>
+                </span>
+                <span className="msgs-settings-arrow">›</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="msgs-settings-group">
+          <div className="msgs-settings-label">App</div>
+          <div className="msgs-settings-section">
+            <div className="msgs-settings-row">
+              <span className="msgs-settings-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" strokeLinecap="round" /></svg>
+              </span>
+              <span className="msgs-settings-row-meta">
+                <strong>Notifications</strong>
+                <small>Alert when a new message arrives</small>
+              </span>
+              <SwitchButton on={notifOn} onToggle={() => onNotif(!notifOn)} label="Message notifications" />
+            </div>
+            <div className="msgs-settings-row">
+              <span className="msgs-settings-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M10 14h.01M14 14h4" strokeLinecap="round" /></svg>
+              </span>
+              <span className="msgs-settings-row-meta">
+                <strong>Enter to send</strong>
+                <small>Shift+Enter makes a new line</small>
+              </span>
+              <SwitchButton on={enterSends} onToggle={() => onEnterSends(!enterSends)} label="Enter to send" />
+            </div>
+            <button type="button" className="msgs-settings-row" onClick={() => onInfo("Privacy", [
+              "Your profile is public in Messages: your name, @username, bio and banner.",
+              "Only accepted contacts can message you directly.",
+              "Anyone else can send you a contact request, or you can request them.",
+              "Followers and following are public, like on TikTok or Roblox.",
+            ])}>
+              <span className="msgs-settings-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" strokeLinecap="round" /></svg>
+              </span>
+              <span className="msgs-settings-row-meta">
+                <strong>Privacy</strong>
+                <small>Who can reach you and what is visible</small>
+              </span>
+              <span className="msgs-settings-arrow">›</span>
+            </button>
+            <button type="button" className="msgs-settings-row" onClick={() => onInfo("Appearance", [
+              "Messages follows the Vertex OS dark theme.",
+              "The orange accent matches the Vertex OS brand (#ff5a1f).",
+            ])}>
+              <span className="msgs-settings-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" strokeLinecap="round" /></svg>
+              </span>
+              <span className="msgs-settings-row-meta">
+                <strong>Appearance</strong>
+                <small>Dark theme with an orange accent</small>
+              </span>
+              <span className="msgs-settings-arrow">›</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="msgs-settings-group">
+          <div className="msgs-settings-label">Support</div>
+          <div className="msgs-settings-section">
+            <button type="button" className="msgs-settings-row" onClick={() => onInfo("Help", [
+              "Open a profile from People or from any chat header to follow or message someone.",
+              "Message an @username — the other person gets a contact request they can accept or decline.",
+              "Unreleased and beta features are listed in the profile's Beta section.",
+              "Group chats work from the sidebar's new-group button.",
+            ])}>
+              <span className="msgs-settings-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="12" cy="12" r="9" /><path d="M9.4 9a2.6 2.6 0 0 1 5.1.8c0 1.7-2.5 2.2-2.5 3.7" strokeLinecap="round" /><path d="M12 17h.01" strokeLinecap="round" /></svg>
+              </span>
+              <span className="msgs-settings-row-meta">
+                <strong>Help</strong>
+                <small>How Messages works</small>
+              </span>
+              <span className="msgs-settings-arrow">›</span>
+            </button>
+            <button type="button" className="msgs-settings-row" onClick={() => onInfo("About", [
+              "Messages 1.0 — part of Vertex OS.",
+              "Built with React, Vite and Supabase.",
+              "Fully open source.",
+            ])}>
+              <span className="msgs-settings-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" strokeLinecap="round" /></svg>
+              </span>
+              <span className="msgs-settings-row-meta">
+                <strong>About</strong>
+                <small>Version and credits</small>
+              </span>
+              <span className="msgs-settings-arrow">›</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="msgs-settings-group">
+          <div className="msgs-settings-label">Session</div>
+          <div className="msgs-settings-section">
+            <button type="button" className="msgs-settings-row msgs-settings-danger" onClick={onSignOut}>
+              <span className="msgs-settings-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </span>
+              <span className="msgs-settings-row-meta">
+                <strong>Log out</strong>
+                <small>Sign out of this device</small>
+              </span>
+              <span className="msgs-settings-arrow">›</span>
+            </button>
+          </div>
+        </div>
+
+        <p className="msgs-settings-version">Messages 1.0 · built for Vertex OS</p>
+      </div>
+    </div>
+  );
+}
+
+function LabPanel({ adminOwner, isOwner, badges, effects, lab, onLab, onToggleBadge, onToggleEffect, onReset, onBack }: {
+  adminOwner: boolean;
+  isOwner: boolean;
+  badges: BadgeId[];
+  effects: string[];
+  lab: LabState;
+  onLab: (k: keyof LabState) => void;
+  onToggleBadge: (id: BadgeId) => void;
+  onToggleEffect: (id: string) => void;
+  onReset: () => void;
+  onBack: () => void;
+}) {
+  const [tab, setTab] = useState<"badges" | "chat" | "layout" | "about">("badges");
+  const rows: { key: keyof LabState; title: string; sub: string; icon: ReactNode }[] = [
+    {
+      key: "anim",
+      title: "Bubble slam animation",
+      sub: "New messages spring in with a bounce",
+      icon: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M21 12a9 9 0 1 1-9-9" strokeLinecap="round" /><path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+    },
+    {
+      key: "cozy",
+      title: "Cozy bubbles",
+      sub: "Bigger, softer message bubbles",
+      icon: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.5L3 20l1-5.6A8.5 8.5 0 1 1 21 11.5Z" strokeLinejoin="round" /></svg>,
+    },
+    {
+      key: "redesign",
+      title: "Next-gen redesign",
+      sub: "Preview the upcoming chat window UI",
+      icon: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="12" cy="12" r="9" /><path d="M12 3v18M12 12l8-1.5M12 12l-8-1.5" strokeLinecap="round" /></svg>,
+    },
+    {
+      key: "compact",
+      title: "Compact sidebar",
+      sub: "Tighter rows in the chat list",
+      icon: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M4 7h16M4 12h16M4 17h10" strokeLinecap="round" /></svg>,
+    },
+  ];
+  const switchRow = (r: (typeof rows)[number]) => (
+    <div className="msgs-settings-row" key={r.key}>
+      <span className="msgs-settings-icon">{r.icon}</span>
+      <span className="msgs-settings-row-meta">
+        <strong>{r.title}</strong>
+        <small>{r.sub}</small>
+      </span>
+      <SwitchButton on={lab[r.key]} onToggle={() => onLab(r.key)} label={r.title} />
+    </div>
+  );
+  const badgeSwitchRow = (id: BadgeId) => {
+    const meta = BADGES.find((b) => b.id === id);
+    if (!meta) return null;
+    return (
+      <div className="msgs-settings-row" key={id}>
+        <span className="msgs-settings-icon msgs-settings-badge-icon">{badgeChip(id)}</span>
+        <span className="msgs-settings-row-meta">
+          <strong>{meta.title}</strong>
+          <small>{id === "verified" ? "Blue checkmark on your profile" : `Shown to everyone as "${meta.label}"`}</small>
+        </span>
+        <SwitchButton on={badges.includes(id)} onToggle={() => onToggleBadge(id)} label={meta.title} />
+      </div>
+    );
+  };
+  return (
+    <div className="msgs-panel msgs-settings">
+      <header className="msgs-panel-head">
+        <button type="button" className="msgs-panel-back" onClick={onBack} aria-label="Back">‹</button>
+        <span className="msgs-panel-title">Experimental Features Lab</span>
+        <span className="msgs-role msgs-role-experimental" title="Experimental Features Lab">EXPERIMENTAL</span>
+        <span className="msgs-role msgs-role-lab" title="Vertex Lab">LAB</span>
+      </header>
+      <div className="msgs-panel-scroll msgs-settings-body">
+        <div className="msgs-lab-tabs" role="tablist">
+          <button type="button" role="tab" aria-selected={tab === "badges"} className={`msgs-profile-tab${tab === "badges" ? " on" : ""}`} onClick={() => setTab("badges")}>Badges</button>
+          <button type="button" role="tab" aria-selected={tab === "chat"} className={`msgs-profile-tab${tab === "chat" ? " on" : ""}`} onClick={() => setTab("chat")}>Chat</button>
+          <button type="button" role="tab" aria-selected={tab === "layout"} className={`msgs-profile-tab${tab === "layout" ? " on" : ""}`} onClick={() => setTab("layout")}>Layout</button>
+          <button type="button" role="tab" aria-selected={tab === "about"} className={`msgs-profile-tab${tab === "about" ? " on" : ""}`} onClick={() => setTab("about")}>About</button>
+        </div>
+
+        {tab === "badges" && (
+          <>
+            <div className="msgs-lab-preview">
+              <span className="msgs-lab-preview-av">🧪</span>
+              <span className="msgs-lab-preview-meta">
+                <span className={`msgs-lab-preview-name${nameFxClass(effects)}`}>Lab preview</span>
+                <span className="msgs-profile-badges msgs-lab-preview-badges">{badges.length ? renderBadges(badges, "pv-") : <span className="msgs-role msgs-role-none" title="No badges">NO BADGES</span>}</span>
+              </span>
+            </div>
+            <div className="msgs-settings-group">
+              <div className="msgs-settings-label">Your badges · all of them, each a real toggle</div>
+              <div className="msgs-settings-section">
+                {ALL_BADGE_IDS.map(badgeSwitchRow)}
+              </div>
+            </div>
+            <div className="msgs-settings-group">
+              <div className="msgs-settings-label">Name effects</div>
+              <div className="msgs-settings-section">
+                <div className="msgs-settings-row">
+                  <span className="msgs-settings-icon">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="12" cy="12" r="4" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" strokeLinecap="round" /></svg>
+                  </span>
+                  <span className="msgs-settings-row-meta">
+                    <strong>Glow name</strong>
+                    <small>Blue glow behind your name</small>
+                  </span>
+                  <SwitchButton on={effects.includes("glow")} onToggle={() => onToggleEffect("glow")} label="Glow" />
+                </div>
+                <div className="msgs-settings-row">
+                  <span className="msgs-settings-icon">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M3 18l4-9 3.5 6 2.5-4L18 18H3Z" strokeLinejoin="round" /><path d="M16 6h5M18.5 3.5v5" strokeLinecap="round" /></svg>
+                  </span>
+                  <span className="msgs-settings-row-meta">
+                    <strong>Moving name</strong>
+                    <small>Animated gradient on your name</small>
+                  </span>
+                  <SwitchButton on={effects.includes("moving-name")} onToggle={() => onToggleEffect("moving-name")} label="Moving name" />
+                </div>
+              </div>
+            </div>
+            <p className="msgs-lab-note">Every badge here is a real switch: turning one off hides it from everyone else. Changes save straight to your database profile.</p>
+          </>
+        )}
+
+        {tab === "chat" && (
+          <>
+            <div className="msgs-settings-group">
+              <div className="msgs-settings-label">Chat experiments</div>
+              <div className="msgs-settings-section">{rows.slice(0, 2).map(switchRow)}</div>
+            </div>
+            <p className="msgs-lab-note">These toggles apply to the live chat instantly so you can judge them with real messages.</p>
+          </>
+        )}
+
+        {tab === "layout" && (
+          <>
+            <div className="msgs-settings-group">
+              <div className="msgs-settings-label">Layout experiments</div>
+              <div className="msgs-settings-section">{rows.slice(2).map(switchRow)}</div>
+            </div>
+            <p className="msgs-lab-note">The redesign preview restyles the whole Messages window while keeping every feature intact.</p>
+          </>
+        )}
+
+        {tab === "about" && (
+          <>
+            <div className="msgs-settings-group">
+              <div className="msgs-settings-label">About the Lab</div>
+              <div className="msgs-settings-section">
+                <div className="msgs-lab-about">
+                  <h4>Hidden features, real switches.</h4>
+                  <p>The Lab is a hidden settings page for admins. Toggles here change the real Messages UI so you can preview unfinished features before they ship.</p>
+                  <p><strong>Access:</strong> {adminOwner ? "Local Control Panel session active — admin tools unlocked." : isOwner ? "Your Messages account is the Database Owner — admin tools unlocked." : "Not an owner — toggles only preview locally for you."}</p>
+                  <p><strong>EXPERIMENTAL / LAB badges:</strong> shown on the Owner's profile for everyone to see.</p>
+                </div>
+              </div>
+            </div>
+            <div className="msgs-settings-group">
+              <div className="msgs-settings-label">Danger zone</div>
+              <div className="msgs-settings-section">
+                <button type="button" className="msgs-settings-row msgs-settings-danger" onClick={onReset}>
+                  <span className="msgs-settings-icon">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" strokeLinecap="round" strokeLinejoin="round" /><path d="M3 4v4h4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </span>
+                  <span className="msgs-settings-row-meta">
+                    <strong>Reset all Lab settings</strong>
+                    <small>Turn every experimental toggle off</small>
+                  </span>
+                  <span className="msgs-settings-arrow">›</span>
+                </button>
+              </div>
+            </div>
+            <p className="msgs-settings-version">Experimental Features Lab · Vertex OS internal</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditProfilePanel({ profile, adminOwner, onBack, onSave }: {
+  profile: Profile;
+  adminOwner: boolean;
+  onBack: () => void;
+  onSave: (p: Profile) => void;
+}) {
+  const [avatar, setAvatar] = useState<AvSource>(profile.avatar);
+  const [displayName, setDisplayName] = useState(profile.name);
+  const [status, setStatus] = useState<Status>(profile.status);
+  const [username, setUsername] = useState(profile.username);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const [bio, setBio] = useState(profile.bio ?? "");
+  const [banner, setBanner] = useState(profile.banner ?? "");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const bannerRef = useRef<HTMLInputElement>(null);
+
+  const onFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!/^image\/(png|jpe?g|webp|gif)$/i.test(f.type)) {
+      setErr("Only images are supported.");
+      return;
+    }
+    void (async () => {
+      setErr(null);
+      const media = await processFile(f, setErr);
+      if (!media) return;
+      const fr = new FileReader();
+      fr.onload = () => {
+        void cropToRatio(fr.result as string, 1).then((squared) => setAvatar({ kind: "custom", data: squared }));
+      };
+      fr.readAsDataURL(media.blob);
+    })();
+  };
+
+  const onBanner = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!/^image\/(png|jpe?g|webp|gif)$/i.test(f.type)) {
+      setErr("Only images are supported.");
+      return;
+    }
+    void (async () => {
+      setErr(null);
+      const media = await processFile(f, setErr);
+      if (!media) return;
+      const fr = new FileReader();
+      fr.onload = () => {
+        void cropToRatio(fr.result as string, 3).then((wide) => setBanner(wide));
+      };
+      fr.readAsDataURL(media.blob);
+    })();
+  };
+
+  const save = () => {
+    const next: Profile = { ...profile, name: displayName.trim().slice(0, 64) || profile.username, avatar, status, bio, banner };
+    onSave(next);
+    writePageOverride(profile.username, { bio, banner, avatar, joinedAt: profile.joinedAt ?? Date.now(), role: profile.role, verified: profile.verified, effects: profile.effects });
+    void netSaveProfilePage(bio, banner).catch(() => { /* columns may not be migrated yet */ });
+    setOk("Profile updated.");
+  };
+
+  const changeName = async () => {
+    const next = username.trim().toLowerCase();
+    if (next === profile.username.toLowerCase()) return;
+    if (!/^[a-z0-9_]{2,16}$/.test(next)) {
+      setErr("Usernames are 2-16 letters, numbers or underscores.");
+      return;
+    }
+    if (next === "vertex") {
+      setErr("That username is reserved.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    setOk(null);
+    const res = await netChangeUsername(next);
+    setBusy(false);
+    if (!res.ok) {
+      setErr(res.error ?? "Could not change your username.");
+      return;
+    }
+    onSave({ ...profile, username: next, name: displayName.trim() || next, avatar, status });
+    setOk(`Username changed to @${next}.`);
+  };
+
+  return (
+    <div className="msgs-panel msgs-edit">
+      <header className="msgs-panel-head">
+        <button type="button" className="msgs-panel-back" onClick={onBack} aria-label="Back">‹</button>
+        <span className="msgs-panel-title">Edit profile</span>
+      </header>
+      <div className="msgs-panel-scroll msgs-edit-body">
+        <div className="msgs-edit-avhead">
+          <GlyphAvatar src={avatar} size={64} username={profile.username} verified={profile.verified} status={status} statusSize={17} />
+          <div>
+            <div className={`msgs-edit-name${nameFxClass(profile.effects)}`}>
+              {displayName.trim() || profile.username}
+              <RoleBadge role={profile.role} />
+              {profile.verified && <VerifiedBadge />}
+            </div>
+            <div className="msgs-edit-handle">@{profile.username}</div>
+          </div>
+        </div>
+
+        <label className="msgs-edit-label">Display name</label>
+        <input className="msgs-edit-input" value={displayName} maxLength={40} placeholder="Display name" onChange={(e) => setDisplayName(e.target.value)} />
+
+        <label className="msgs-edit-label">Username (this is how you log in)</label>
+        <div className="msgs-edit-uname">
+          <span className="msgs-at">@</span>
+          <input className="msgs-edit-input" value={username} maxLength={16} onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase())} />
+          <button type="button" className="msgs-edit-secondary" disabled={busy || username.trim().toLowerCase() === profile.username.toLowerCase()} onClick={() => void changeName()}>Change</button>
+        </div>
+
+        <label className="msgs-edit-label">Avatar</label>
+        <div className="msgs-edit-grid">
+          {PRESETS.map((p, i) => (
+            <button key={i} type="button" className={`msgs-edit-preset ${avatar.kind === "preset" && avatar.id === i ? "on" : ""}`} style={{ background: `linear-gradient(135deg, ${p.a}, ${p.b})` }} onClick={() => setAvatar({ kind: "preset", id: i })}>
+              {p.glyph}
+            </button>
+          ))}
+        </div>
+        <div className="msgs-edit-upload">
+          <button type="button" className="msgs-edit-secondary" onClick={() => fileRef.current?.click()}>Upload a photo</button>
+          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" style={{ display: "none" }} onChange={onFile} />
+          {avatar.kind === "custom" && <span className="msgs-edit-preview"><img src={avatar.data} alt="avatar" /></span>}
+        </div>
+
+        <label className="msgs-edit-label">Banner</label>
+        <div className={`msgs-edit-banner${banner ? "" : " empty"}`} style={banner ? { backgroundImage: `url(${banner})` } : undefined}>
+          {!banner && <span>No banner yet</span>}
+        </div>
+        <div className="msgs-edit-banner-btns">
+          <button type="button" className="msgs-edit-secondary" onClick={() => bannerRef.current?.click()}>Upload banner</button>
+          {banner && <button type="button" className="msgs-edit-secondary" onClick={() => setBanner("")}>Remove</button>}
+        </div>
+        <input ref={bannerRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" style={{ display: "none" }} onChange={onBanner} />
+
+        <label className="msgs-edit-label">About me</label>
+        <textarea className="msgs-edit-input msgs-edit-bio" value={bio} maxLength={280} placeholder="Tell people about yourself..." onChange={(e) => setBio(e.target.value)} />
+
+        <label className="msgs-edit-label">Status</label>
+        <div className="msgs-edit-statuses">
+          {(["online", "idle", "offline"] as Status[]).map((s) => (
+            <button key={s} type="button" className={`msgs-edit-status ${status === s ? "on" : ""}`} onClick={() => setStatus(s)}>
+              <span className={`msgs-status-dot msgs-status-${s}`} />
+              <span style={{ textTransform: "capitalize" }}>{s}</span>
+            </button>
+          ))}
+        </div>
+
+        {adminOwner && (
+          <>
+            <label className="msgs-edit-label">Unreleased — only you</label>
+            <div className="msgs-edit-statuses">
+              {EFFECTS.map((fx) => {
+                const on = (profile.effects ?? []).includes(fx.id);
+                return (
+                  <button
+                    key={fx.id}
+                    type="button"
+                    className={`msgs-edit-status ${on ? "on" : ""}`}
+                    onClick={() => onSave({ ...profile, effects: on ? (profile.effects ?? []).filter((x) => x !== fx.id) : [...(profile.effects ?? []), fx.id] })}
+                  >
+                    {fx.label}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {err && <p className="msgs-setup-err">{err}</p>}
+        {ok && <p className="msgs-setup-ok">{ok}</p>}
+
+        <div className="msgs-edit-actions">
+          <button type="button" className="msgs-profile-btn" onClick={onBack}>Cancel</button>
+          <button type="button" className="msgs-profile-btn primary" onClick={save}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfilePanel({ user, isSelf, isContact, pending, adminOwner, isOwner, contactsList, onBack, onChat, onEdit, onSettings, onOpenUser, onToggleEffect, onToggleVerified }: {
+  user: RosterUser;
+  isSelf: boolean;
+  isContact: boolean;
+  pending: boolean;
+  adminOwner: boolean;
+  isOwner: boolean;
+  contactsList: RosterUser[];
+  onBack: () => void;
+  onChat: () => void;
+  onEdit: () => void;
+  onSettings: () => void;
+  onOpenUser: (u: RosterUser) => void;
+  onToggleEffect: (username: string, effects: string[]) => void;
+  onToggleVerified: (username: string, verified: boolean) => void;
+}) {
+  const [page, setPage] = useState<NetUserPage | null>(null);
+  const [tab, setTab] = useState<"about" | "followers" | "following" | "contacts">("about");
+  const [lists, setLists] = useState<{ followers: NetFollowUser[] | null; following: NetFollowUser[] | null }>({ followers: null, following: null });
+  const [follow, setFollow] = useState<{ followers: number; following: number; isFollowing: boolean }>({ followers: 0, following: 0, isFollowing: false });
+  const [followBusy, setFollowBusy] = useState(false);
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    if ((tab !== "followers" && tab !== "following") || lists[tab] !== null) return;
+    let alive = true;
+    void loadFollowList(user.username, tab).then((rows) => { if (alive) setLists((s) => ({ ...s, [tab]: rows })); }).catch(() => { if (alive) setLists((s) => ({ ...s, [tab]: [] })); });
+    return () => { alive = false; };
+  }, [tab, lists, user.username]);
+  const ov = pageOverrideFor(user.username);
+  useEffect(() => {
+    let alive = true;
+    void loadUserProfile(user.username).then((p) => { if (alive && p) { setPage(p); setFollow({ followers: p.followers ?? 0, following: p.following ?? 0, isFollowing: p.isFollowing ?? false }); } }).catch(() => { /* migration not applied yet */ });
+    return () => { alive = false; };
+  }, [user.username]);
+  const special = user.username === "vertex-os" || (isSelf && (adminOwner || isOwner));
+  const verified = Boolean(user.verified) || Boolean(page?.verified) || Boolean(ov?.verified) || special;
+  const role: Role | undefined = special ? "owner" : page?.role ?? ov?.role ?? user.role;
+  const effects = special ? ["moving-name", "glow"] : (page?.effects && page.effects.length ? page.effects : ov?.effects && ov.effects.length ? ov.effects : user.effects);
+  const storedBadges: BadgeId[] | null = page?.badges && page.badges.length ? (page.badges as BadgeId[]) : user.badges && user.badges.length ? (user.badges as BadgeId[]) : null;
+  const pageAvatar: AvSource | null = page ? (page.avatarKind === "custom" && page.avatarData ? { kind: "custom", data: page.avatarData } : { kind: "preset", id: page.avatarId }) : null;
+  const avatar = ov?.avatar ?? pageAvatar ?? user.avatar ?? { kind: "preset" as const, id: user.preset };
+  const statusLine = isSelf ? "This is you" : user.system ? "Official account" : page?.status ?? user.status ?? "offline";
+  const banner = page?.banner || ov?.banner || user.banner || "";
+  const bio = page?.bio || ov?.bio || user.bio || "";
+  const joinedAt = page?.joinedAt ?? ov?.joinedAt ?? user.joinedAt ?? null;
+  const toggleFollow = async () => {
+    if (isSelf || followBusy) return;
+    const prior = follow;
+    const optimist = prior.isFollowing
+      ? { followers: Math.max(0, prior.followers - 1), following: prior.following, isFollowing: false }
+      : { followers: prior.followers + 1, following: prior.following, isFollowing: true };
+    setFollow(optimist);
+    setFollowBusy(true);
+    try {
+      const next = optimist.isFollowing ? await followUser(user.username) : await unfollowUser(user.username);
+      setFollow({ followers: next.followers, following: next.following, isFollowing: next.isFollowing });
+    } catch {
+      setFollow(prior);
+    }
+    setFollowBusy(false);
+  };
+  const followRows: RosterUser[] = (tab === "followers" || tab === "following" ? lists[tab] ?? [] : [])
+    .filter((u) => u.username.toLowerCase().includes(q.toLowerCase()) || u.name.toLowerCase().includes(q.toLowerCase()))
+    .map((u) => ({ username: u.username, name: u.name, preset: hashPreset(u.username), avatar: u.avatarData ? { kind: "custom" as const, data: u.avatarData } : { kind: "preset" as const, id: u.avatarId } }));
+  const contactRows: RosterUser[] = contactsList.filter((c) => (c.name?.toLowerCase() ?? "").includes(q.toLowerCase()) || c.username.toLowerCase().includes(q.toLowerCase()));
+  const betaItems: string[] = [
+    role === "owner" ? "Owner" : role === "moderator" ? "Moderator" : "User",
+    ...(verified ? ["Verified"] : []),
+    ...(effects ?? []).map((e) => EFFECTS.find((x) => x.id === e)?.label ?? e),
+  ];
+  const browseRow = (u: RosterUser) => (
+    <button key={u.username} type="button" className="msgs-profile-browse-row" onClick={() => onOpenUser(u)}>
+      <GlyphAvatar src={u.avatar ?? { kind: "preset", id: u.preset }} size={38} username={u.username} />
+      <span className="msgs-profile-list-info">
+        <strong>{u.name}</strong>
+        <span>@{u.username}</span>
+      </span>
+    </button>
+  );
+  const contactBtn = (c: RosterUser) => (
+    <button key={c.username} type="button" className="msgs-profile-contact" onClick={() => onOpenUser(c)}>
+      <GlyphAvatar src={c.avatar ?? { kind: "preset", id: c.preset }} size={38} username={c.username} />
+      <span className="msgs-profile-list-info">
+        <strong>{c.name}</strong>
+        <span>@{c.username}</span>
+      </span>
+    </button>
+  );
+  return (
+    <div className="msgs-panel msgs-profile-panel">
+      <header className="msgs-panel-head">
+        <button type="button" className="msgs-panel-back" onClick={onBack} aria-label="Back">‹</button>
+        <span className="msgs-panel-title">{isSelf ? "Your profile" : special ? "Vertex-OS official" : `@${user.username}`}</span>
+      </header>
+      <div className="msgs-panel-scroll">
+        <div className={`msgs-profile-cover${banner ? "" : " default"}`} style={banner ? { backgroundImage: `url(${banner})` } : undefined}>
+          <span className="msgs-profile-cover-shade" />
+        </div>
+        <div className="msgs-profile-main">
+          <div className="msgs-profile-header">
+            <div className="msgs-profile-header-av">
+              <GlyphAvatar src={avatar} size={96} username={user.username} verified={verified} status={user.status ?? "offline"} statusSize={22} className="msgs-avatar-ring" />
+            </div>
+            <div className="msgs-profile-header-info">
+              <div className={`msgs-profile-name${nameFxClass(effects)}`}>{user.name}</div>
+              <div className="msgs-profile-badges">
+                {storedBadges
+                  ? renderBadges(storedBadges)
+                  : (<>
+                      {special && <><span className="msgs-role msgs-role-mod" title="Moderator">MOD</span><span className="msgs-role msgs-role-admin" title="Admin">ADMIN</span><span className="msgs-role msgs-role-dev" title="Developer">DEV</span></>}
+                      <RoleBadge role={role} />
+                      {role === "owner" && <><span className="msgs-role msgs-role-experimental" title="Experimental Features Lab">EXPERIMENTAL</span><span className="msgs-role msgs-role-lab" title="Vertex Lab">LAB</span></>}
+                      {verified && <span className="msgs-profile-verifiedchip"><VerifiedBadge size={14} />Verified</span>}
+                    </>)}
+              </div>
+              <div className="msgs-profile-user">@{user.username}</div>
+              <div className="msgs-profile-meta">
+                <span className={`msgs-status-dot msgs-status-${user.status ?? "offline"}`} />
+                <span className="msgs-profile-state">{statusLine}</span>
+                {joinedAt ? <><span className="msgs-profile-dot">·</span><span>{fmtJoinLong(joinedAt)}</span></> : null}
+              </div>
+              {bio && <p className="msgs-profile-bio">{bio}</p>}
+            </div>
+          </div>
+
+          <div className="msgs-profile-actions">
+            {isSelf ? (
+              <>
+                <button type="button" className="msgs-profile-btn primary" onClick={onEdit}>Edit profile</button>
+                <button type="button" className="msgs-profile-btn" onClick={onSettings}>Settings</button>
+              </>
+            ) : (
+              <>
+                <button type="button" className={`msgs-profile-btn primary${follow.isFollowing ? " on" : ""}`} onClick={toggleFollow} disabled={followBusy || isSelf}>
+                  {follow.isFollowing ? "Following" : "Follow"}
+                </button>
+                <button type="button" className="msgs-profile-btn" onClick={onChat}>{isContact ? "Chat" : "Message"}</button>
+                {!isContact && pending && <span className="msgs-profile-pending">Request pending</span>}
+              </>
+            )}
+          </div>
+
+          <div className="msgs-profile-stats">
+            <button type="button" className={`msgs-profile-stat${tab === "followers" ? " on" : ""}`} onClick={() => setTab("followers")} aria-label="Followers">
+              <strong>{fmtBig(follow.followers)}</strong>
+              <span>Followers</span>
+            </button>
+            <button type="button" className={`msgs-profile-stat${tab === "following" ? " on" : ""}`} onClick={() => setTab("following")} aria-label="Following">
+              <strong>{fmtBig(follow.following)}</strong>
+              <span>Following</span>
+            </button>
+            <button type="button" className={`msgs-profile-stat${tab === "contacts" ? " on" : ""}`} onClick={() => setTab("contacts")} aria-label="Contacts">
+              <strong>{contactsList.length}</strong>
+              <span>Contacts</span>
+            </button>
+          </div>
+
+          <div className="msgs-profile-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={tab === "about"} className={`msgs-profile-tab${tab === "about" ? " on" : ""}`} onClick={() => setTab("about")}>About</button>
+            <button type="button" role="tab" aria-selected={tab === "followers"} className={`msgs-profile-tab${tab === "followers" ? " on" : ""}`} onClick={() => setTab("followers")}>Followers</button>
+            <button type="button" role="tab" aria-selected={tab === "following"} className={`msgs-profile-tab${tab === "following" ? " on" : ""}`} onClick={() => setTab("following")}>Following</button>
+            <button type="button" role="tab" aria-selected={tab === "contacts"} className={`msgs-profile-tab${tab === "contacts" ? " on" : ""}`} onClick={() => setTab("contacts")}>Contacts</button>
+          </div>
+
+          {tab === "about" && (
+            <>
+              <section className="msgs-profile-card msgs-profile-sec">
+                <h4>About</h4>
+                <p className="msgs-profile-about-text">{bio || "No description yet."}</p>
+              </section>
+
+              <section className="msgs-profile-card msgs-profile-sec">
+                <h4>Contacts</h4>
+                {contactsList.length === 0 ? (
+                  <p className="msgs-profile-empty">No contacts yet.</p>
+                ) : (
+                  <>
+                    {contactsList.slice(0, 5).map(contactBtn)}
+                    {contactsList.length > 5 && (
+                      <button type="button" className="msgs-profile-seeall" onClick={() => setTab("contacts")}>See all ({contactsList.length})</button>
+                    )}
+                  </>
+                )}
+              </section>
+
+              <section className="msgs-profile-card msgs-profile-sec">
+                <h4>Unreleased · Beta {isOwner && <span className="msgs-profile-beta-note">admins only</span>}</h4>
+                <div className="msgs-profile-beta-chips">
+                  {betaItems.map((item) => <span key={item} className="msgs-profile-beta-chip">{item}</span>)}
+                </div>
+                {isOwner && (
+                  <div className="msgs-profile-beta-tools">
+                    <button type="button" className={`msgs-profile-beta-tool${verified ? " on" : ""}`} onClick={() => onToggleVerified(user.username, !verified)}>
+                      {verified ? "Verified ✓" : "Mark verified"}
+                    </button>
+                    {EFFECTS.map((fx) => {
+                      const on = (effects ?? []).includes(fx.id);
+                      return (
+                        <button key={fx.id} type="button" className={`msgs-profile-beta-tool${on ? " on" : ""}`} onClick={() => onToggleEffect(user.username, on ? (effects ?? []).filter((x) => x !== fx.id) : [...(effects ?? []), fx.id])}>
+                          {fx.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          {(tab === "followers" || tab === "following") && (
+            <div className="msgs-profile-listcard">
+              <div className="msgs-profile-browse-search">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" strokeLinecap="round" /></svg>
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${tab}`} />
+              </div>
+              <div className="msgs-profile-browse">
+                {lists[tab] === null ? (
+                  <div className="msgs-profile-empty">Loading…</div>
+                ) : followRows.length === 0 ? (
+                  <div className="msgs-profile-empty">No {tab === "followers" ? "followers" : "following"} to show.</div>
+                ) : (
+                  followRows.map(browseRow)
+                )}
+              </div>
+            </div>
+          )}
+
+          {tab === "contacts" && (
+            <div className="msgs-profile-listcard">
+              <div className="msgs-profile-browse-search">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" strokeLinecap="round" /></svg>
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search contacts" />
+              </div>
+              <div className="msgs-profile-browse">
+                {contactRows.length === 0 ? (
+                  <div className="msgs-profile-empty">{contactsList.length === 0 ? "No contacts yet." : "No matching contacts."}</div>
+                ) : (
+                  contactRows.map(browseRow)
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MessagesSurface() {
   const [state] = useState(initialState);
   const [profile, setProfile] = useState<Profile | null>(state.profile);
@@ -1221,6 +2379,69 @@ export function MessagesSurface() {
   const [tab, setTab] = useState<"chats" | "people">("chats");
   const [query, setQuery] = useState("");
   const [statusMenu, setStatusMenu] = useState(false);
+  const [roleMenu, setRoleMenu] = useState(false);
+  const [profileView, setProfileView] = useState<{ user: RosterUser; isSelf: boolean } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [notifOn, setNotifOn] = useState(true);
+  const [enterSends, setEnterSends] = useState(true);
+  const [info, setInfo] = useState<{ title: string; lines: string[] } | null>(null);
+  const [labOpen, setLabOpen] = useState(false);
+  const [lab, setLab] = useState<LabState>(readLab);
+  const adminOwner = adminOwnerActive();
+  const isOwner = profile?.role === "owner" || adminOwner;
+  const labClass = [lab.anim ? "msgs-lab-anim" : "", lab.cozy ? "msgs-lab-cozy" : "", lab.redesign ? "msgs-lab-redesign" : "", lab.compact ? "msgs-lab-compact" : ""].filter(Boolean).join(" ");
+  const toggleLab = (k: keyof LabState) => setLab((s) => {
+    const n = { ...s, [k]: !s[k] };
+    try { localStorage.setItem(LAB_KEY, JSON.stringify(n)); } catch { /* noop */ }
+    return n;
+  });
+  const resetLab = () => {
+    setLab({ ...DEFAULT_LAB });
+    try { localStorage.removeItem(LAB_KEY); } catch { /* noop */ }
+    setToast("Lab settings reset.");
+  };
+  const defaultBadgesForSelf = (): BadgeId[] => {
+    const owner = profile?.role === "owner" || adminOwner;
+    const ids: BadgeId[] = [];
+    if (owner || adminOwner) ids.push("owner", "admin", "dev", "mod");
+    if (owner) ids.push("experimental", "lab");
+    if (profile?.verified) ids.push("verified");
+    return ids;
+  };
+  const activeBadges: BadgeId[] = profile?.badges ? (profile.badges as BadgeId[]) : defaultBadgesForSelf();
+  const applyBadges = async (username: string, badges: BadgeId[]) => {
+    try {
+      await netPersistBadges(username, badges);
+      setProfile((p) => (p && p.username.toLowerCase() === username.toLowerCase() ? { ...p, badges } : p));
+      setProfileView((v) => (v && v.user.username === username ? { ...v, user: { ...v.user, badges } } : v));
+      setToast("Badges updated — visible to everyone.");
+    } catch {
+      setProfile((p) => (p && p.username.toLowerCase() === username.toLowerCase() ? { ...p, badges } : p));
+      setProfileView((v) => (v && v.user.username === username ? { ...v, user: { ...v.user, badges } } : v));
+      setToast("Couldn't save badges to the database — re-run the owner SQL so the badges column exists.");
+    }
+  };
+  const toggleBadge = (id: BadgeId) => {
+    if (!profile) return;
+    const next = activeBadges.includes(id) ? activeBadges.filter((x) => x !== id) : [...activeBadges, id];
+    void applyBadges(profile.username, next);
+  };
+
+  useEffect(() => {
+    if (!adminOwner || profile) return;
+    setProfile({
+      username: "vertex-os",
+      name: "Vertex-OS",
+      avatar: { kind: "custom", data: SITE_LOGO },
+      status: "online",
+      role: "owner",
+      verified: true,
+      effects: ["moving-name", "glow"],
+      bio: "Official Vertex-OS administrator account.",
+      joinedAt: Date.now(),
+    });
+  }, [adminOwner, profile]);
   const [newChat, setNewChat] = useState(false);
   const [newGroup, setNewGroup] = useState(false);
   const [draft, setDraft] = useState("");
@@ -1265,6 +2486,121 @@ export function MessagesSurface() {
       write(CUSTOMS_KEY, nx);
       return nx;
     });
+  };
+
+  const signOut = async () => {
+    await authSignOut();
+    try { localStorage.removeItem(PROF_KEY); } catch { /* noop */ }
+    setProfile(null);
+    setActive(null);
+    setPeople([]);
+    setRoleMenu(false);
+    setProfileView(null);
+    setSettingsOpen(false);
+    setEditOpen(false);
+    setLabOpen(false);
+  };
+
+  const openSelfProfile = () => {
+    if (!profile) return;
+    setProfileView({
+      user: { username: profile.username, name: profile.name, avatar: profile.avatar, preset: hashPreset(profile.username), verified: profile.verified, role: profile.role, effects: profile.effects, status: profile.status, bio: profile.bio, banner: profile.banner, joinedAt: profile.joinedAt },
+      isSelf: true,
+    });
+  };
+
+  const openProfile = (u: RosterUser) => {
+    setProfileView({ user: u, isSelf: Boolean(profile && u.username === profile.username.toLowerCase()) });
+  };
+
+  const contactsList = useMemo(
+    () =>
+      contacts
+        .map((c) => getUser(c))
+        .filter((x): x is RosterUser => Boolean(x && !x.system && !x.group))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [contacts, getUser],
+  );
+
+  const applyRole = async (username: string, role: Role) => {
+    setRoleMenu(false);
+    try {
+      await netSetRole(username, role);
+      setPeople((ps) => ps.map((p) => (p.username === username ? { ...p, role } : p)));
+      setToast(role === "user" ? `Removed @${username}'s badge` : `@${username} is now ${role === "owner" ? "Owner" : "Moderator"}`);
+    } catch (e) {
+      if (adminOwner) {
+        try {
+          await netPersistRole(username, role);
+          setPeople((ps) => ps.map((p) => (p.username === username ? { ...p, role } : p)));
+          setToast(role === "user" ? `Removed @${username}'s badge` : `@${username} is now ${role === "owner" ? "Owner" : "Moderator"}`);
+        } catch {
+          setPeople((ps) => ps.map((p) => (p.username === username ? { ...p, role } : p)));
+          setToast(`Couldn't save to the database — your account isn't an Owner yet. Run the owner SQL in Supabase first.`);
+        }
+      } else {
+        setToast(e instanceof Error ? e.message : "Could not update that role.");
+      }
+    }
+  };
+
+  const applyVerified = async (username: string, verified: boolean) => {
+    try {
+      await netSetVerified(username, verified);
+      setPeople((ps) => ps.map((p) => (p.username === username ? { ...p, verified } : p)));
+      setProfile((p) => (p && p.username.toLowerCase() === username.toLowerCase() ? { ...p, verified } : p));
+      setProfileView((v) => (v && v.user.username === username ? { ...v, user: { ...v.user, verified } } : v));
+      setToast(verified ? `Verified @${username}` : `Removed verification from @${username}`);
+    } catch (e) {
+      if (adminOwner) {
+        try {
+          await netPersistVerified(username, verified);
+          setPeople((ps) => ps.map((p) => (p.username === username ? { ...p, verified } : p)));
+          setProfile((p) => (p && p.username.toLowerCase() === username.toLowerCase() ? { ...p, verified } : p));
+          setProfileView((v) => (v && v.user.username === username ? { ...v, user: { ...v.user, verified } } : v));
+          setToast(verified ? `Verified @${username}` : `Removed verification from @${username}`);
+        } catch {
+          setPeople((ps) => ps.map((p) => (p.username === username ? { ...p, verified } : p)));
+          setProfile((p) => (p && p.username.toLowerCase() === username.toLowerCase() ? { ...p, verified } : p));
+          setProfileView((v) => (v && v.user.username === username ? { ...v, user: { ...v.user, verified } } : v));
+          setToast(`Couldn't save to the database — your account isn't an Owner yet. Run the owner SQL in Supabase first.`);
+        }
+      } else {
+        setToast(e instanceof Error ? e.message : "Could not update verification.");
+      }
+    }
+  };
+
+  const applyEffects = async (username: string, effects: string[]) => {
+    try {
+      await netSetEffects(username, effects);
+      setPeople((ps) => ps.map((p) => (p.username === username ? { ...p, effects } : p)));
+      setProfile((p) => (p && p.username.toLowerCase() === username.toLowerCase() ? { ...p, effects } : p));
+      setProfileView((v) => (v && v.user.username === username ? { ...v, user: { ...v.user, effects } } : v));
+      setToast("Effects updated.");
+    } catch (e) {
+      if (adminOwner) {
+        try {
+          await netPersistEffects(username, effects);
+          setPeople((ps) => ps.map((p) => (p.username === username ? { ...p, effects } : p)));
+          setProfile((p) => (p && p.username.toLowerCase() === username.toLowerCase() ? { ...p, effects } : p));
+          setProfileView((v) => (v && v.user.username === username ? { ...v, user: { ...v.user, effects } } : v));
+          setToast("Effects updated.");
+        } catch {
+          setPeople((ps) => ps.map((p) => (p.username === username ? { ...p, effects } : p)));
+          setProfileView((v) => (v && v.user.username === username ? { ...v, user: { ...v.user, effects } } : v));
+          setToast(`Couldn't save to the database — your account isn't an Owner yet. Run the owner SQL in Supabase first.`);
+        }
+      } else {
+        setToast(e instanceof Error ? e.message : "Could not update effects.");
+      }
+    }
+  };
+
+  const toggleEffect = (username: string, id: string) => {
+    const current = people.find((p) => p.username === username)?.effects ?? [];
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    void applyEffects(username, next);
   };
 
   useEffect(() => {
@@ -1324,6 +2660,19 @@ export function MessagesSurface() {
   useEffect(() => {
     if (profile) netSetProfile(toNetProfile(profile));
   }, [profile]);
+
+  // Pull the server-authoritative role / verified / effects for my own account,
+  // since the locally cached profile does not store them.
+  useEffect(() => {
+    if (!profile) return;
+    let alive = true;
+    void loadMyProfileRow().then((row) => {
+      if (!alive || !row) return;
+      setProfile((p) => (p ? { ...p, role: row.role ?? p.role, verified: row.verified, effects: row.effects, avatar: row.avatarKind === "custom" && row.avatarData ? { kind: "custom", data: row.avatarData } : row.avatarKind === "preset" ? { kind: "preset", id: row.avatarId } : p.avatar } : p));
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.username]);
 
   useEffect(() => {
     write(DMS_KEY, dms);
@@ -1413,7 +2762,7 @@ export function MessagesSurface() {
             readByMe: e.message.readByMe,
             ...(e.message.media ? { media: e.message.media } : {}),
           });
-          if (e.message.from !== "me" && e.message.peer !== activeRef.current) {
+          if (e.message.from !== "me" && e.message.peer !== activeRef.current && notifOn) {
             setNotice({ user: e.message.peer, kind: "text", text: e.message.text || "Sent an attachment" });
           }
           break;
@@ -1443,7 +2792,7 @@ export function MessagesSurface() {
           break;
       }
     }),
-    [profile?.username],
+    [profile?.username, notifOn],
   );
 
   useEffect(() => {
@@ -1623,11 +2972,12 @@ export function MessagesSurface() {
   const activeMsgs = active ? dms[active] ?? [] : [];
 
   if (!profile) {
-    return <SetupModal live={people.map((p) => p.username)} onDone={(p) => setProfile(p)} />;
+    if (adminOwner) return <div className="msgs-surface" />;
+    return <AuthModal live={people.map((p) => p.username)} onDone={(p) => setProfile(p)} />;
   }
 
   return (
-    <div className="msgs-app">
+    <div className={`msgs-app${labClass ? ` ${labClass}` : ""}`}>
       {(netNote || net !== "online") && (
         <div className="msgs-net-note">
           <span>{messagesBackendConfigured
@@ -1653,11 +3003,13 @@ export function MessagesSurface() {
           </div>
 
           <div className="msgs-me">
-            <GlyphAvatar src={profile.avatar} size={46} username={profile.username} status={profile.status} statusSize={15} verified={profile.username.toLowerCase() === "vertex"} />
-            <div className="msgs-me-meta">
-              <span className="msgs-me-name">{profile.name}</span>
-              <span className="msgs-me-user">@{profile.username}</span>
-            </div>
+            <button type="button" className="msgs-me-open" onClick={openSelfProfile} title="View your profile">
+              <GlyphAvatar src={profile.avatar} size={46} username={profile.username} status={profile.status} statusSize={15} />
+              <div className="msgs-me-meta">
+                <span className="msgs-me-name">{profile.name}</span>
+                <span className="msgs-me-user">@{profile.username}</span>
+              </div>
+            </button>
             <button
               type="button"
               className="msgs-status-chip"
@@ -1672,6 +3024,14 @@ export function MessagesSurface() {
                 <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+            <div className="msgs-me-actions">
+              <button type="button" className="msgs-signout" title="Settings" onClick={() => setSettingsOpen(true)}>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
+            </div>
             {statusMenu && (
               <>
                 <div className="msgs-ghost-overlay" onClick={() => setStatusMenu(false)} />
@@ -1754,8 +3114,9 @@ export function MessagesSurface() {
                   <div key={p.username} className="msgs-person-row">
                     <button type="button" className="msgs-req-row msgs-newchat-row" onClick={() => contacts.includes(p.username) ? startChat(p.username) : void startChat(p.username)}>
                       <GlyphAvatar src={p.avatar ?? { kind: "preset", id: p.preset }} size={40} username={p.username} status={p.status ?? "offline"} />
-                      <span className="msgs-row-meta"><span className="msgs-row-name">{p.name}</span><span className="msgs-row-preview">@{p.username} · {p.status ?? "offline"}</span></span>
+                      <span className="msgs-row-meta"><span className="msgs-row-name">{p.name}<RoleBadge role={p.role} compact />{p.verified && <VerifiedBadge size={13} />}</span><span className="msgs-row-preview">@{p.username} · {p.status ?? "offline"}</span></span>
                     </button>
+                    <button type="button" className="msgs-person-action ghost" onClick={() => openProfile(p)}>Profile</button>
                     {contacts.includes(p.username) ? <button type="button" className="msgs-person-action" onClick={() => startChat(p.username)}>Chat</button> : requests.some((r) => r.kind === "contact" && r.username === p.username) ? <span className="msgs-person-pending">Pending</span> : <button type="button" className="msgs-person-action" onClick={() => void startChat(p.username)}>Add</button>}
                   </div>
                 ))}
@@ -1789,13 +3150,14 @@ export function MessagesSurface() {
                       src={ru?.avatar ?? rosterAvatar({ username: u, system: sys, preset: ru?.preset ?? 0 })}
                       size={46}
                       username={u}
-                      verified={sys}
+                      verified={sys || ru?.verified}
                       status={sys ? undefined : isOnline(u) ? (ru?.status === "idle" ? "idle" : "online") : "offline"}
                     />
                     <span className="msgs-row-meta">
                       <span className="msgs-row-name">
                         {name}
-                        {sys && <VerifiedBadge />}
+                        <RoleBadge role={ru?.role} compact />
+                        {(sys || ru?.verified) && <VerifiedBadge />}
                       </span>
                       <span className="msgs-row-preview">{preview}</span>
                     </span>
@@ -1824,16 +3186,20 @@ export function MessagesSurface() {
                 <button type="button" className="msgs-back-btn" onClick={() => setActive(null)}>
                   ‹
                 </button>
-                <GlyphAvatar src={rosterAvatar({ username: activeUser.username, system: activeUser.system, preset: activeUser.preset })} size={40} username={activeUser.username} verified={activeUser.verified} />
-                <div className="msgs-conv-head-meta">
-                  <span className="msgs-conv-name">
-                    {activeUser.name}
-                    {activeUser.verified && <VerifiedBadge />}
-                  </span>
-                  <span className="msgs-conv-sub">
-                    {activeUser.system ? "Official system channel" : activeUser.group ? `${activeUser.members?.length ?? 0} members` : `@${activeUser.username} · ${isOnline(activeUser.username) ? activeUser.status ?? "online" : "offline"}`}
-                  </span>
-                </div>
+                <button type="button" className="msgs-conv-open" onClick={() => { if (activeUser && !activeUser.system && !activeUser.group) openProfile(activeUser); }}>
+                  <GlyphAvatar src={activeUser.avatar ?? rosterAvatar({ username: activeUser.username, system: activeUser.system, preset: activeUser.preset })} size={40} username={activeUser.username} verified={activeUser.verified} />
+                  <div className="msgs-conv-head-meta">
+                    <span className="msgs-conv-name">
+                      {activeUser.name}
+                      <RoleBadge role={activeUser.role} />
+                      {activeUser.verified && <VerifiedBadge />}
+                    </span>
+                    <span className="msgs-conv-sub">
+                      {activeUser.system ? "Official system channel" : activeUser.group ? `${activeUser.members?.length ?? 0} members` : `@${activeUser.username}`}
+                    </span>
+                  </div>
+                </button>
+
                 {!activeUser.system && !activeUser.group && !!active && contacts.includes(active) && isOnline(active) && (
                   <div className="msgs-head-actions">
                     <button type="button" title="Call" onClick={() => startCall(activeUser.username, "voice")}>
@@ -1849,6 +3215,36 @@ export function MessagesSurface() {
                     </button>
                   </div>
                 )}
+                {isOwner && !activeUser.system && !activeUser.group && (
+                  <div className="msgs-head-actions">
+                    <button type="button" title="Manage badge" onClick={() => setRoleMenu((v) => !v)}>
+                      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.9">
+                        <path d="M12 2l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V5l7-3z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                {roleMenu && isOwner && !activeUser.system && !activeUser.group && (
+                  <>
+                    <div className="msgs-ghost-overlay" onClick={() => setRoleMenu(false)} />
+                    <div className="msgs-status-menu msgs-role-menu">
+                      {(["owner", "moderator", "user"] as Role[]).map((r) => (
+                        <button key={r} type="button" className={activeUser.role === r ? "sel" : ""} onClick={() => void applyRole(activeUser.username, r)}>
+                          <span style={{ textTransform: "capitalize" }}>{r === "user" ? "No badge" : r}</span>
+                        </button>
+                      ))}
+                      <div className="msgs-owner-sep" />
+                      <button type="button" className={activeUser.verified ? "sel" : ""} onClick={() => void applyVerified(activeUser.username, !activeUser.verified)}>
+                        {activeUser.verified ? "Remove verified" : "Give verified"}
+                      </button>
+                      {EFFECTS.map((fx) => (
+                        <button key={fx.id} type="button" className={activeUser.effects?.includes(fx.id) ? "sel" : ""} onClick={() => toggleEffect(activeUser.username, fx.id)}>
+                          {fx.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </header>
 
               <div className="msgs-msgs">
@@ -1863,7 +3259,9 @@ export function MessagesSurface() {
                       {showDay && <div className="msgs-day">{dLabel}</div>}
                       <div className={`msgs-bubble-row ${mine ? "mine" : "theirs"}`}>
                         {!mine && (
-                          <GlyphAvatar src={rosterAvatar({ username: activeUser.group ? m.from : activeUser.username, system: activeUser.system, preset: activeUser.group ? (getUser(m.from)?.preset ?? hashPreset(m.from)) : activeUser.preset })} size={30} username={activeUser.group ? m.from : activeUser.username} />
+                          <GlyphAvatar src={activeUser.group
+                          ? (getUser(m.from)?.avatar ?? { kind: "preset" as const, id: getUser(m.from)?.preset ?? hashPreset(m.from) })
+                          : (activeUser.avatar ?? rosterAvatar({ username: activeUser.username, system: activeUser.system, preset: activeUser.preset }))} size={30} username={activeUser.group ? m.from : activeUser.username} />
                         )}
                         <div className={`msgs-bubble-wrap ${activeUser.system ? "system" : ""} ${mine ? "mine" : ""}`}>
                           {activeUser.group && <div className="msgs-bubble-name"><span>{mine ? "You" : getUser(m.from)?.name ?? m.from}</span><span className="msgs-bubble-time">{fmtTime(m.at)}</span></div>}
@@ -1942,7 +3340,11 @@ export function MessagesSurface() {
                   <input
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && send()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && enterSends) {
+                        if (!e.shiftKey) { e.preventDefault(); send(); }
+                      }
+                    }}
                     className="msgs-input"
                     placeholder={activeMsgs.length === 0 ? `Message ${activeUser.group ? activeUser.name : `@${active}`}...` : "Message..."}
                   />
@@ -1980,7 +3382,71 @@ export function MessagesSurface() {
       {toast && <div className="msgs-toast">{toast}</div>}
       {newChat && <NewChatModal people={people} me={profile.username.toLowerCase()} onPick={startChat} onCreate={startChat} onClose={() => setNewChat(false)} />}
       {newGroup && <CreateGroupModal people={people.filter((person) => contacts.includes(person.username))} onCreate={(title, usernames) => void createGroupChat(title, usernames)} onClose={() => setNewGroup(false)} />}
+      {settingsOpen && profile && (
+        <SettingsPanel
+          profile={profile}
+          notifOn={notifOn}
+          onNotif={setNotifOn}
+          enterSends={enterSends}
+          onEnterSends={setEnterSends}
+          onBack={() => setSettingsOpen(false)}
+          onOpenProfile={() => { setSettingsOpen(false); openSelfProfile(); }}
+          onEditProfile={() => { setSettingsOpen(false); setEditOpen(true); }}
+          onSignOut={() => void signOut()}
+          onInfo={(t, lines) => setInfo({ title: t, lines })}
+          isOwner={isOwner}
+          onLab={() => setLabOpen(true)}
+        />
+      )}
+      {editOpen && profile && (
+        <EditProfilePanel
+          adminOwner={adminOwner}
+          profile={profile}
+          onBack={() => setEditOpen(false)}
+          onSave={(p) => {
+            setProfile(p);
+            setEditOpen(false);
+            setProfileView((v) => (v && v.isSelf ? { ...v, user: { username: p.username, name: p.name, avatar: p.avatar, preset: hashPreset(p.username), verified: p.verified, role: p.role, effects: p.effects, status: p.status, bio: p.bio, banner: p.banner, joinedAt: p.joinedAt } } : v));
+            setPeople((ps) => ps.map((x) => (x.username === p.username.toLowerCase() ? { ...x, name: p.name, avatar: p.avatar, bio: p.bio, banner: p.banner, status: p.status, effects: p.effects, verified: p.verified } : x)));
+            setToast("Profile saved.");
+          }}
+        />
+      )}
+      {labOpen && profile && (
+        <LabPanel
+          adminOwner={adminOwner}
+          isOwner={isOwner}
+          badges={activeBadges}
+          effects={profile.effects ?? []}
+          lab={lab}
+          onLab={toggleLab}
+          onToggleBadge={toggleBadge}
+          onToggleEffect={(id) => applyEffects(profile.username, (profile.effects ?? []).includes(id) ? (profile.effects ?? []).filter((x) => x !== id) : [...(profile.effects ?? []), id])}
+          onReset={resetLab}
+          onBack={() => setLabOpen(false)}
+        />
+      )}
       {call && <CallOverlay call={call} onEnd={() => setCall(null)} onActive={() => setCall((c) => (c ? { ...c, stage: "active", startedAt: Date.now() } : c))} resolve={(u) => getUser(u) ?? { username: u, name: nameCap(u), preset: hashPreset(u) }} />}
+      {profileView && (
+        <ProfilePanel
+          key={profileView.user.username}
+          user={profileView.user}
+          isSelf={profileView.isSelf}
+          isContact={contacts.includes(profileView.user.username)}
+          pending={requests.some((r) => r.kind === "contact" && r.username === profileView.user.username)}
+          adminOwner={adminOwner}
+          isOwner={profileView.isSelf && isOwner}
+          contactsList={contactsList}
+          onBack={() => setProfileView(null)}
+          onChat={() => { const u = profileView.user.username; setProfileView(null); setTab("chats"); void startChat(u); }}
+          onEdit={() => { setProfileView(null); setEditOpen(true); }}
+          onSettings={() => { setProfileView(null); setSettingsOpen(true); }}
+          onOpenUser={(u) => setProfileView({ user: u, isSelf: Boolean(profile && u.username === profile.username.toLowerCase()) })}
+          onToggleEffect={applyEffects}
+          onToggleVerified={applyVerified}
+        />
+      )}
+      {info && <InfoModal title={info.title} lines={info.lines} onClose={() => setInfo(null)} />}
       {lightbox && (
         <div className="msgs-modal-overlay msgs-lightbox" onClick={() => setLightbox(null)}>
           <img src={lightbox} alt="attachment" onClick={(e) => e.stopPropagation()} />
