@@ -1363,10 +1363,10 @@ type RewriteCtx = {
 
 function sanitizeBannedUrls(html: string, bannedUsers: Set<string>): string {
   return html.replace(
-    /https?:\/\/cdn\.jsdelivr\.net\/gh\/([a-z0-9A-Z-]+)\/([^/@\s]+?)(?:@([^/@\s]+?))?(\/[^"'<>\s]*)?/g,
+    /https?:\/\/(?:cdn|fastly|gcore|testingcf)\.jsdelivr\.net\/gh\/([^/@\s"'<>]+)\/([^/@\s"'<>]+)(?:@([^/@\s"'<>]+))?(\/[^"'\s<>]*)?/gi,
     (whole, user, repo, ref, path) => {
       if (!bannedUsers.has(user)) return whole;
-      const branch = !ref || ref === "latest" ? "main" : ref;
+      const branch = !ref || ref === "latest" ? "HEAD" : ref;
       return `https://raw.githack.com/${user}/${repo}/${branch}${path ?? ""}`;
     }
   );
@@ -1390,9 +1390,8 @@ const JS_DELIVR_BANNED_USERS = new Set([
 ]);
 
 function neutralizeBootKillers(html: string): string {
-  html = html.replace(
-    /<script[^>]*>(?:[\s\S]*?)(?:navigator\.serviceWorker\.register|ServiceWorkerContainer)(?:[\s\S]*?)<\/script>/gi,
-    "<!-- sw stripped -->"
+  html = html.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gi, (block, body) =>
+    /navigator\.serviceWorker\.register|ServiceWorkerContainer/.test(body) ? "<!-- sw stripped -->" : block
   );
   html = html.replace(/\bnavigator\.serviceWorker\.register\s*\([^;]*?\)\s*;?/g, "/* sw register removed */");
   html = html.replace(
@@ -1412,6 +1411,8 @@ const INLINEABLE_GAME_HOSTS = new Set(["cdn.jsdelivr.net", "raw.githack.com", "r
 function canInlineGame(src: string): boolean {
   try { return INLINEABLE_GAME_HOSTS.has(new URL(src).hostname); } catch { return false; }
 }
+
+const GAME_URL_SHIM = `(function(){var B={genizy:1,"web-ports":1,waycrosspublicmedia:1,"gn-math":1,Stinkalistic:1,"67-Factory":1,slqntdevss:1,aukak:1,Pixelsuft:1,NotRexed:1,WhoIsEv:1,R74nCom:1,New25Said:1,faralong:1};function fix(u){if(typeof u!="string")return u;var m=/^(https?:)\\/\\/(?:cdn|fastly|gcore|testingcf)\\.jsdelivr\\.net\\/gh\\/([^\\/@]+)\\/([^\\/@]+)(?:@([^\\/]+))?(\\/[^?#]*)?(\\?[^#]*)?/i.exec(u);if(m&&B[m[2]]){return "https://raw.githack.com/"+m[2]+"/"+m[3]+"/"+(m[4]||"HEAD")+(m[5]||"")+(m[6]||"");}return u;}window.__fix=fix;try{var of=window.fetch;if(of){window.fetch=function(i,init){if(typeof i==="string")i=fix(i);return of.call(this,i,init);};}}catch(e){}try{var xo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){var a=[].slice.call(arguments);if(a.length>1)a[1]=fix(a[1]);return xo.apply(this,a);};}catch(e){}function sp2(proto,prop){try{var d=Object.getOwnPropertyDescriptor(proto,prop);if(!d||!d.set||!d.get)return;Object.defineProperty(proto,prop,{configurable:true,enumerable:d.enumerable,get:d.get,set:function(v){return d.set.call(this,fix(v));}});}catch(e){}}sp2(HTMLScriptElement.prototype,"src");sp2(HTMLImageElement.prototype,"src");sp2(HTMLLinkElement.prototype,"href");sp2(HTMLIFrameElement.prototype,"src");sp2(HTMLSourceElement.prototype,"src");sp2(HTMLVideoElement.prototype,"src");sp2(HTMLAudioElement.prototype,"src");})();`;
 
 function GameFrame({ game, onLoad }: { game: Ps5Game; onLoad?: () => void }) {
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
@@ -1441,14 +1442,20 @@ function GameFrame({ game, onLoad }: { game: Ps5Game; onLoad?: () => void }) {
         html = neutralizeBootKillers(html);
         html = sanitizeBannedUrls(html, JS_DELIVR_BANNED_USERS);
         if (!/<base\s/i.test(html)) {
+          const baseUrl = game.play.slice(0, game.play.lastIndexOf("/") + 1).replace(/([^:]\/)\/+/g, "$1");
           const headIdx = html.search(/<head[^>]*>/i);
           if (headIdx >= 0) {
             const end = html.indexOf(">", headIdx);
-            const baseUrl = game.play.slice(0, game.play.lastIndexOf("/") + 1);
             html = html.slice(0, end + 1) + `<base href="${baseUrl}" />` + html.slice(end + 1);
           } else {
-            html = `<head><base href="${game.play.slice(0, game.play.lastIndexOf("/") + 1)}" /></head>` + html;
+            html = `<head><base href="${baseUrl}" /></head>` + html;
           }
+        }
+        const shimTag = `<script>${GAME_URL_SHIM}</script>`;
+        if (/<head[^>]*>/i.test(html)) {
+          html = html.replace(/<head[^>]*>/i, (m) => m + shimTag);
+        } else {
+          html = shimTag + html;
         }
         const blob = new Blob([html], { type: "text/html;charset=utf-8" });
         objUrl = URL.createObjectURL(blob);
