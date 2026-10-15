@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aether — Movies &amp; TV</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0a0f; color: #e7e7ee; font-family: system-ui, "Segoe UI", Roboto, sans-serif; }
+  #aether-boot { position: fixed; inset: 0; display: grid; place-items: center; font-size: 15px; opacity: 0.85; }
+</style>
+</head>
+<body>
+<div id="aether-boot">Loading Aether…</div>
+<script>
+(function () {
+  var TARGET = "https://aether.cx/";
+  var BASE = "https://aether.cx/";
+  try { history.replaceState({}, "", "/"); } catch (e) {}
+  fetch(TARGET, { mode: "cors", credentials: "omit", cache: "no-store" })
+    .then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    })
+    .then(function (html) {
+      if (!/<base\s/i.test(html)) {
+        if (/<head[^>]*>/i.test(html)) {
+          html = html.replace(/<head[^>]*>/i, function (m) { return m + '<base href="' + BASE + '">'; });
+        } else {
+          html = '<base href="' + BASE + '">' + html;
+        }
+      }
+      document.open();
+      document.write(html);
+      document.close();
+    })
+    .catch(function (e) {
+      var b = document.getElementById("aether-boot");
+      var msg = e && e.message ? e.message : String(e);
+      if (b) b.textContent = "Failed to load Aether: " + msg;
+    });
+})();
+</script>
+</body>
+</html>
