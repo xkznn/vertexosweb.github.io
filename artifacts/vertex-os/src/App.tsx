@@ -7,7 +7,7 @@ import {
   Image, LayoutGrid, LockKeyhole, Menu, MessageCircle, Minus, MonitorCog, Music2,
   Palette, Pin, PinOff, Play, Power, Puzzle, Radio, Rocket, RotateCcw,
   Settings2, ShieldBan, SlidersHorizontal, Search, Sparkles, Terminal, Volume2, VolumeX, Waves, X, Pause, Maximize, Maximize2, Minimize2, House, Plus, Package, EyeOff, ExternalLink, Contrast, Calculator,
-  Shuffle, Repeat, Clock, ListVideo, Trash2, Link2, User, Languages, Info, Monitor, Paintbrush, SunMoon, Cloud, FileDown,
+  Shuffle, Repeat, Clock, ListVideo, Trash2, Link2, User, Languages, Info, Monitor, Paintbrush, SunMoon, Cloud, FileDown, Clapperboard,
 } from "lucide-react";
 
 
@@ -38,7 +38,7 @@ import { PERF } from "./perf";
 import { GhostPayloadCard, GhostViewSurface, captureScreenHtml, ghostDeliver, ghostExecute, ghostProbe, ghostSetSnapGetter, ghostSetStatus, ghostStop, ghostUiStore, snapSig, startGhostView, useGhostViewUi, type GvIncoming, type GvSnap, type GvWindow } from "./ghostview";
 import { getMediaSession, setMediaSession, notifyMediaSession, subscribeMediaSession, type MediaSession } from "./now-playing";
 type WallpaperId = "vertex-studio" | "halloween" | "macos-default" | "macos-lock" | "singularity" | "snake-skeleton" | "snow-fox" | "cine55" | "gojo" | "rainy-city" | "green-anime" | "brother" | "99-med" | "gojo-sukuna" | "sukuna-fire" | "desktop-lines" | "skello" | "we-black-hole" | "we-snow-fox" | "we-gojo-sukuna" | "we-sukuna-fire" | "we-cine-55" | "we-snake" | "we-green-anime" | "we-brother" | "we-gojo" | "we-rainy-city" | "we-desktop-lines" | "we-skello" | "we-99-med" | "we-45e33" | "we-f1-formula" | "we-hunt-shadow-2" | "we-minecraft-01" | "we-minecraft-02" | "we-minecraft-03" | "we-monkey" | "we-supra-drift" | "we-yuji-52" | "we-cozy-fox" | "we-yuta" | "we-bmw-car-driving" | "we-eyes-toward-heaven" | "we-goku-ultra" | "we-galaxy-eyes" | "we-celestial-battle" | "we-tess-kotkin" | "we-yuta-rika" | "we-satoru-gojo" | "we-dark-angel" | "we-makima-devilish" | "we-makima-burning" | "we-haimiya-mio" | "we-toji" | "we-mamonir" | "we-lantern-festival" | "we-miyabi" | "we-qingxiao" | "we-megumin" | "we-odette" | "we-blue-sky" | "we-frutiger" | "we-synthwave-dmc" | "we-zankou" | "we-ghost-rider" | "we-molala" | "we-dark-king" | "we-celestial-veil" | "we-miku-nakano" | "we-gotoubun" | "we-quintuplets" | "we-black-silk-waves" | "we-blue-dragon-logo" | "we-astra-yao" | "we-luo-tianyi-christmas" | "we-mc-northern-light" | "we-mc-falling-snow" | "we-mc-aquarium" | "we-mc-holiday-heart" | "we-mc-fireplace" | "we-mc-panels" | "we-mc-cherry-blossom" | "we-mc-raindrops" | "we-silver-surfer" | "we-girl-behind-curtains" | "we-vagabond-miyamoto" | "we-itachi-crow" | "we-gojo-hollow" | "we-quintuplets-sister" | "we-yuta-okkotsu" | "we-gojo-vs-sukuna-2" | "we-gojo-cursed-world" | "we-gojo-six-eyes" | "we-frieren-blue-horizon" | "we-frieren-blooming-stream" | "we-nissan-skyline-r33-mc" | "we-torii";
-type AppId = "hub" | "spicetify" | "browser" | "pizza" | "roblox" | "messages" | "verai" | "vertube" | "settings" | "games" | "translucenttb" | "wallpaper-engine" | "minecraft" | "rainmeter" | "terminal" | "calculator" | "ghostview" | "links" | "discord" | "vcloud" | "admin";
+type AppId = "hub" | "spicetify" | "browser" | "pizza" | "roblox" | "messages" | "verai" | "vertube" | "movies" | "settings" | "games" | "translucenttb" | "wallpaper-engine" | "minecraft" | "rainmeter" | "terminal" | "calculator" | "ghostview" | "links" | "discord" | "vcloud" | "admin";
 type Ps5DesktopShortcut = { id: string; name: string; cover: string };
 type TaskbarPos = "bottom" | "top" | "left" | "right";
 type WindowRect = { x: number; y: number; w: number; h: number };
@@ -389,6 +389,7 @@ const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; icon
   { id: "messages", title: "Messages", subtitle: t("appSub.messages"), icon: MessageCircle, iconImg: asset("images/messages-icon.webp"), pinned: true },
   { id: "verai", title: "VER-AI", subtitle: t("appSub.verai"), icon: Sparkles, iconImg: asset("images/ver-ai.ico"), pinned: true },
   { id: "vertube", title: "VER-TUBE", subtitle: "watch any video, no account", icon: Play, iconImg: "https://www.youtube.com/s/desktop/af0a3c1e/img/favicon_144x144.png", pinned: true },
+  { id: "movies", title: "Movies", subtitle: "movies & shows, no ads", icon: Clapperboard, iconImg: "https://aether.cx/favicon.ico", pinned: true },
   { id: "settings", title: "Config", subtitle: t("appSub.settings"), icon: Settings2, iconImg: asset("images/config-icon.png"), pinned: true },
   { id: "games", title: "PS5 Emu", subtitle: t("appSub.games"), icon: Gamepad2, iconImg: asset("images/ps5-emu.png"), squircle: true },
   { id: "minecraft", title: "Minecraft Launcher", subtitle: t("appSub.minecraft"), icon: Gamepad2, iconImg: MC_ICON, squircle: true },
@@ -405,7 +406,7 @@ type AppOverride = { name?: string; showName?: boolean; iconUrl?: string; pinned
 
 const APP_SECTIONS: { id: string; tone: string; all?: boolean; ids: AppId[] }[] = [
   { id: "all", tone: "tone-all", all: true, ids: [] },
-  { id: "watch", tone: "tone-watch", ids: ["vertube", "spicetify", "messages", "verai"] },
+  { id: "watch", tone: "tone-watch", ids: ["vertube", "movies", "spicetify", "messages", "verai"] },
   { id: "play", tone: "tone-play", ids: ["roblox", "minecraft", "games", "pizza", "vcloud"] },
   { id: "create", tone: "tone-create", ids: ["terminal", "wallpaper-engine", "browser", "calculator", "hub", "settings", "translucenttb", "rainmeter", "ghostview", "links"] },
 ];
@@ -5492,6 +5493,7 @@ function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (k
   if (id === "spicetify") return <CinefySurface onClose={onClose ?? (() => undefined)} onMinimize={onMinimize ?? (() => undefined)} onTrackChange={onTrackChange ?? (() => undefined)} />;
   const adRedir = settings.adblock && settings.adblockUrl.trim() ? settings.adblockUrl : null;
   if (id === "hub") return <iframe className="browser-frame" src={adRedir ?? "https://velara.cc/g"} title="Vertex-Hub / velara.cc" allow="autoplay; clipboard-write; camera; microphone; fullscreen" />;
+  if (id === "movies") return <ProxyUrlFrame url="https://aether.cx/" title="Aether — Movies & TV" blockAds />;
   if (id === "wallpaper-engine") return <div className="window-surface we-app-surface"><WallEngineApp appliedHome={appliedWallpaper} appliedLock={appliedLockWallpaper} onApplyWallpaper={onApplyWallpaper ?? (() => {})} notify={onNotify ?? undefined} /></div>;
   if (id === "browser") return adRedir
     ? <iframe className="browser-frame" src={adRedir} title="Browser redirect" allow="autoplay; clipboard-write; fullscreen" />
