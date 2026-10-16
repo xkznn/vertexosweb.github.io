@@ -14,6 +14,7 @@ import {
 import { Ps5EmulatorSurface } from "./components/ps5-emulator";
 import { VerAiSurface } from "./components/ver-ai";
 import { BrowserSurface, ProxyUrlFrame } from "./components/browser-app";
+import moviesAppHtml from "./movies/app.html?raw";
 import { VertexStudioWallpaper } from "./components/vertex-wallpaper";
 import { HalloweenDecor, HalloweenWallpaper } from "./components/halloween";
 import { MusicWidgetLayer, MusicWidgetManager } from "./components/music-widgets";
@@ -5493,7 +5494,7 @@ function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (k
   if (id === "spicetify") return <CinefySurface onClose={onClose ?? (() => undefined)} onMinimize={onMinimize ?? (() => undefined)} onTrackChange={onTrackChange ?? (() => undefined)} />;
   const adRedir = settings.adblock && settings.adblockUrl.trim() ? settings.adblockUrl : null;
   if (id === "hub") return <iframe className="browser-frame" src={adRedir ?? "https://velara.cc/g"} title="Vertex-Hub / velara.cc" allow="autoplay; clipboard-write; camera; microphone; fullscreen" />;
-  if (id === "movies") return <iframe className="browser-frame" src={`${import.meta.env.BASE_URL}movies/`} title="Vertex Movies" allow="autoplay; clipboard-write; camera; microphone; fullscreen; gamepad; encrypted-media; picture-in-picture" allowFullScreen />;
+  if (id === "movies") return <iframe className="browser-frame" srcDoc={moviesAppHtml} title="Vertex Movies" allow="autoplay; clipboard-write; camera; microphone; fullscreen; gamepad; encrypted-media; picture-in-picture" allowFullScreen />;
   if (id === "wallpaper-engine") return <div className="window-surface we-app-surface"><WallEngineApp appliedHome={appliedWallpaper} appliedLock={appliedLockWallpaper} onApplyWallpaper={onApplyWallpaper ?? (() => {})} notify={onNotify ?? undefined} /></div>;
   if (id === "browser") return adRedir
     ? <iframe className="browser-frame" src={adRedir} title="Browser redirect" allow="autoplay; clipboard-write; fullscreen" />
