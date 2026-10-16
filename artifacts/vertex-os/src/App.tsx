@@ -390,7 +390,7 @@ const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; icon
   { id: "messages", title: "Messages", subtitle: t("appSub.messages"), icon: MessageCircle, iconImg: asset("images/messages-icon.webp"), pinned: true },
   { id: "verai", title: "VER-AI", subtitle: t("appSub.verai"), icon: Sparkles, iconImg: asset("images/ver-ai.ico"), pinned: true },
   { id: "vertube", title: "VER-TUBE", subtitle: "watch any video, no account", icon: Play, iconImg: "https://www.youtube.com/s/desktop/af0a3c1e/img/favicon_144x144.png", pinned: true },
-  { id: "movies", title: "Movies", subtitle: "real movies & TV, free, no ads", icon: Clapperboard, pinned: true },
+  { id: "movies", title: "Netflix", subtitle: "movies & TV shows — free", icon: Clapperboard, iconImg: "https://cdn.worldvectorlogo.com/logos/netflix-logo-icon.svg", pinned: true },
   { id: "settings", title: "Config", subtitle: t("appSub.settings"), icon: Settings2, iconImg: asset("images/config-icon.png"), pinned: true },
   { id: "games", title: "PS5 Emu", subtitle: t("appSub.games"), icon: Gamepad2, iconImg: asset("images/ps5-emu.png"), squircle: true },
   { id: "minecraft", title: "Minecraft Launcher", subtitle: t("appSub.minecraft"), icon: Gamepad2, iconImg: MC_ICON, squircle: true },
