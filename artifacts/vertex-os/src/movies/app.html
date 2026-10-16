@@ -11,6 +11,21 @@
   body{ overflow-x:hidden; }
   a{ color:inherit; }
 
+  /* ---------- scrollbars ---------- */
+  *{ scrollbar-width:thin; scrollbar-color:#4a4a4a transparent; }
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:#3d3d3d; border-radius:10px; border:2px solid transparent; background-clip:padding-box; transition:background .2s ease; }
+  ::-webkit-scrollbar-thumb:hover{ background:#8a1622; background-clip:padding-box; }
+  ::-webkit-scrollbar-corner{ background:transparent; }
+  .rail{ scrollbar-color:#3a3a3a transparent; }
+  .rail::-webkit-scrollbar{ height:8px; }
+  .rail::-webkit-scrollbar-track{ background:transparent; }
+  .rail::-webkit-scrollbar-thumb{ background:#383838; border-radius:8px; border:2px solid transparent; background-clip:content-box; min-width:40px; }
+  .rail:hover::-webkit-scrollbar-thumb{ background:#5c5a58; }
+  .rail::-webkit-scrollbar-thumb:hover{ background:var(--red); }
+  .overlay::-webkit-scrollbar-thumb:hover{ background:#666; }
+
   /* ---------- boot animation ---------- */
   #boot{ position:fixed; inset:0; z-index:100; background:#000; display:flex; align-items:center; justify-content:center; overflow:hidden; transition:opacity .6s ease; }
   #boot.done{ opacity:0; pointer-events:none; }
@@ -54,6 +69,12 @@
   .card .sub{ font-size:11px; color:var(--mut); margin-top:3px; }
   .card .rate{ position:absolute; top:8px; left:8px; background:rgba(0,0,0,.72); border:1px solid #333; border-radius:4px; padding:2px 6px; font-size:11px; font-weight:700; color:#ffd54a; }
   .card .type{ position:absolute; top:8px; right:8px; background:var(--red); border-radius:4px; padding:2px 7px; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; }
+  .card .bm{ position:absolute; bottom:8px; right:8px; z-index:2; width:30px; height:30px; border-radius:50%; border:1px solid rgba(255,255,255,.55); background:rgba(0,0,0,.6); color:#fff; font-size:16px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .15s, background .15s, transform .15s; }
+  .card:hover .bm{ opacity:1; }
+  .card .bm:hover{ background:rgba(0,0,0,.88); transform:scale(1.08); }
+  .card .bm.on{ background:var(--red); border-color:var(--red); opacity:1; }
+  .toast{ position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(18px); z-index:80; background:#e50914; color:#fff; font-weight:600; font-size:14px; padding:11px 20px; border-radius:6px; box-shadow:0 12px 34px rgba(0,0,0,.65); opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; }
+  .toast.on{ opacity:1; transform:translateX(-50%) translateY(0); }
 
   .status{ color:var(--mut); padding:60px 6px; text-align:center; font-size:14px; }
   .spinner{ width:30px; height:30px; border:3px solid #2a2a2a; border-top-color:var(--red); border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 10px; }
@@ -124,6 +145,7 @@
     <button class="tab on" data-tab="home">Home</button>
     <button class="tab" data-tab="movie">Movies</button>
     <button class="tab" data-tab="series">TV Shows</button>
+    <button class="tab" data-tab="mylist">My List</button>
   </nav>
   <label class="search">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -151,6 +173,8 @@
     <div class="btn ghost" id="pHint" style="position:absolute;left:12px;top:12px;display:none">Not loading? Try another server</div>
   </div>
 </div>
+
+<div class="toast" id="toast"></div>
 
 <script>
 (function(){
@@ -186,6 +210,29 @@
   var qEl = document.getElementById("q");
   var current = null;
   var cache = {};
+  var KEY_LIST = "vf_netflix_list", KEY_RECENT = "vf_netflix_recent";
+
+  function storeArr(k){ try{ return JSON.parse(localStorage.getItem(k)||"[]") || []; }catch(e){ return []; } }
+  function storeSet(k,a){ try{ localStorage.setItem(k, JSON.stringify(a.slice(0,120))); }catch(e){} }
+  function toItem(m){ return { imdb_id:m.imdb_id, type:m.type||"movie", moviedb_id:m.moviedb_id||"", name:m.name, poster:m.poster||"", background:m.background||"", year:m.year||"" }; }
+  function inList(id){ return storeArr(KEY_LIST).some(function(x){ return x.imdb_id===id; }); }
+  function itemFromCard(el){ return { imdb_id:el.getAttribute("data-imdb"), type:el.getAttribute("data-type"), moviedb_id:el.getAttribute("data-tmdb"), name:el.getAttribute("data-name") }; }
+  function toggleList(m){
+    var a = storeArr(KEY_LIST);
+    var i = -1;
+    for(var k=0;k<a.length;k++){ if(a[k].imdb_id===m.imdb_id){ i=k; break; } }
+    var added;
+    if(i>=0){ a.splice(i,1); added=false; } else { a.unshift(toItem(m)); added=true; }
+    storeSet(KEY_LIST, a);
+    return added;
+  }
+  function pushRecent(m){
+    var a = storeArr(KEY_RECENT).filter(function(x){ return x.imdb_id!==m.imdb_id; });
+    a.unshift(toItem(m));
+    storeSet(KEY_RECENT, a);
+  }
+  var toastEl = document.getElementById("toast"), toastT;
+  function toast(msg){ if(!toastEl) return; toastEl.textContent=msg; toastEl.classList.add("on"); clearTimeout(toastT); toastT=setTimeout(function(){ toastEl.classList.remove("on"); },1900); }
 
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
   function get(u){ if(cache[u]) return Promise.resolve(cache[u]); return fetch(CN+u,{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }).then(function(j){ cache[u]=j; return j; }); }
@@ -196,8 +243,10 @@
     var img = posterOf(m);
     var sub = [m.year, (m.type==="series"?"Series":"Movie")].filter(Boolean).join(" · ");
     var rate = m.imdbRating ? '<div class="rate">&#9733; '+esc(m.imdbRating)+'</div>' : "";
+    var on = inList(m.imdb_id) ? " on" : "";
     return '<div class="card" data-imdb="'+esc(m.imdb_id)+'" data-type="'+esc(m.type||"movie")+'" data-tmdb="'+esc(m.moviedb_id||"")+'" data-name="'+esc(m.name)+'">'+
       rate + '<img class="p" loading="lazy" src="'+esc(img)+'" onerror="this.style.opacity=0.15" alt="" />'+
+      '<button class="bm'+on+'" title="My List" aria-label="Add to My List">'+(on?"&#10003;":"+")+'</button>'+
       '<div class="meta"><div class="nm">'+esc(m.name)+'</div><div class="sub">'+esc(sub)+'</div></div></div>';
   }
 
@@ -213,6 +262,14 @@
       var metas = (j.metas||[]).filter(function(m){return m.imdb_id;});
       rail.innerHTML = metas.map(card).join("");
     }).catch(function(){ sec.style.display="none"; });
+  }
+
+  function renderLocalRail(title, items){
+    if(!items || !items.length) return;
+    var sec = document.createElement("section");
+    sec.className = "row";
+    sec.innerHTML = '<h2>'+esc(title)+'</h2><div class="rail">'+items.map(card).join("")+'</div>';
+    view.appendChild(sec);
   }
 
   function renderHero(m){
@@ -237,6 +294,8 @@
       var m = (j.metas||[]).filter(function(x){return x.imdb_id;})[0];
       if(m) renderHero(m);
     }).catch(function(){});
+    renderLocalRail("Continue Watching", storeArr(KEY_RECENT));
+    renderLocalRail("My List", storeArr(KEY_LIST));
     ROWS_HOME.forEach(function(r){ renderRail(r.t, r.url); });
   }
 
@@ -246,6 +305,14 @@
       var metas = (j.metas||[]).filter(function(m){return m.imdb_id;});
       view.querySelector(".grid").innerHTML = metas.map(card).join("");
     }).catch(function(){ view.innerHTML = '<div class="grid"></div>'; });
+  }
+
+  function renderMylist(){
+    var items = storeArr(KEY_LIST);
+    view.innerHTML = '<h2 style="padding:16px 26px 4px;font-size:26px;font-weight:900">My List</h2>';
+    if(!items.length){ view.innerHTML += '<div class="status">Nothing here yet. Open a title and tap &ldquo;+ My List&#8221;.</div>'; return; }
+    var grid = document.createElement("div"); grid.className = "grid"; grid.innerHTML = items.map(card).join("");
+    view.appendChild(grid);
   }
 
   function doSearch(term){
@@ -278,6 +345,7 @@
     pEpisode.innerHTML = eps.map(function(v){ return '<option value="'+v.number+'">E'+v.number+" "+(v.name||"").slice(0,22)+'</option>'; }).join("");
   }
   function loadStream(){
+    pushRecent(current);
     var s = SERVERS.filter(function(x){return x.id===pServer.value;})[0] || SERVERS[0];
     var t = current.moviedb_id;
     var url;
@@ -311,6 +379,7 @@
             '<div class="desc">'+esc(m.description||"")+'</div>'+
             '<div class="btns"><button class="btn" id="playBtn">&#9654; Play</button>'+
             (m.trailers&&m.trailers[0]&&m.trailers[0].source?('<button class="btn ghost" id="trailerBtn">Trailer</button>'):"")+
+            '<button class="btn ghost" id="listBtn">'+(inList(m.imdb_id)?"&#10003; My List":"+ My List")+'</button>'+
             '</div>'+
           '</div>'+
         '</div>'+
@@ -319,6 +388,8 @@
         vid.map(function(v){return '<div class="ep" data-s="'+v.season+'" data-e="'+v.number+'"><b>S'+v.season+' E'+v.number+' · '+esc((v.name||"").slice(0,40))+'</b><span>'+esc((v.overview||"").slice(0,90))+'</span></div>';}).join("")+
         '</div></div>' : '<div style="height:22px"></div>');
     document.getElementById("playBtn").onclick = function(){ playStream(m, null); };
+    var lb = document.getElementById("listBtn");
+    if(lb) lb.onclick = function(){ var added = toggleList(m); lb.innerHTML = added ? "&#10003; My List" : "+ My List"; toast(added ? "Added to My List" : "Removed from My List"); };
     Array.prototype.forEach.call(detail.querySelectorAll(".ep"), function(el){
       el.onclick = function(){ playStream(m, {s:el.getAttribute("data-s"), e:el.getAttribute("data-e")}); };
     });
@@ -338,6 +409,19 @@
 
   /* ---------- wiring ---------- */
   view.addEventListener("click", function(e){
+    var bm = e.target.closest ? e.target.closest(".bm") : null;
+    if(bm){
+      var hc = bm.closest(".card");
+      if(hc){
+        var added = toggleList(itemFromCard(hc));
+        bm.classList.toggle("on", added);
+        bm.innerHTML = added ? "&#10003;" : "+";
+        toast(added ? "Added to My List" : "Removed from My List");
+        var onTab = document.querySelector(".tab.on");
+        if(onTab && onTab.getAttribute("data-tab")==="mylist") renderMylist();
+      }
+      return;
+    }
     var c = e.target.closest ? e.target.closest(".card") : null;
     if(c){ openDetail(c.getAttribute("data-imdb"), c.getAttribute("data-type"), c.getAttribute("data-tmdb"), c.getAttribute("data-name")); }
   });
@@ -347,7 +431,7 @@
       t.classList.add("on");
       var tab = t.getAttribute("data-tab");
       qEl.value = "";
-      if(tab==="home") renderHome(); else renderList(tab);
+      if(tab==="home") renderHome(); else if(tab==="mylist") renderMylist(); else renderList(tab);
     });
   });
   document.getElementById("closeDetail").onclick = function(){ overlay.classList.remove("on"); };
