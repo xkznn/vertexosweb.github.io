@@ -389,7 +389,7 @@ const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; icon
   { id: "messages", title: "Messages", subtitle: t("appSub.messages"), icon: MessageCircle, iconImg: asset("images/messages-icon.webp"), pinned: true },
   { id: "verai", title: "VER-AI", subtitle: t("appSub.verai"), icon: Sparkles, iconImg: asset("images/ver-ai.ico"), pinned: true },
   { id: "vertube", title: "VER-TUBE", subtitle: "watch any video, no account", icon: Play, iconImg: "https://www.youtube.com/s/desktop/af0a3c1e/img/favicon_144x144.png", pinned: true },
-  { id: "movies", title: "Movies", subtitle: "movies & shows, no ads", icon: Clapperboard, iconImg: "https://aether.cx/favicon.ico", pinned: true },
+  { id: "movies", title: "Movies", subtitle: "real movies & TV, free, no ads", icon: Clapperboard, pinned: true },
   { id: "settings", title: "Config", subtitle: t("appSub.settings"), icon: Settings2, iconImg: asset("images/config-icon.png"), pinned: true },
   { id: "games", title: "PS5 Emu", subtitle: t("appSub.games"), icon: Gamepad2, iconImg: asset("images/ps5-emu.png"), squircle: true },
   { id: "minecraft", title: "Minecraft Launcher", subtitle: t("appSub.minecraft"), icon: Gamepad2, iconImg: MC_ICON, squircle: true },
@@ -5493,7 +5493,7 @@ function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (k
   if (id === "spicetify") return <CinefySurface onClose={onClose ?? (() => undefined)} onMinimize={onMinimize ?? (() => undefined)} onTrackChange={onTrackChange ?? (() => undefined)} />;
   const adRedir = settings.adblock && settings.adblockUrl.trim() ? settings.adblockUrl : null;
   if (id === "hub") return <iframe className="browser-frame" src={adRedir ?? "https://velara.cc/g"} title="Vertex-Hub / velara.cc" allow="autoplay; clipboard-write; camera; microphone; fullscreen" />;
-  if (id === "movies") return <iframe className="browser-frame" src={`${import.meta.env.BASE_URL}movies/frame.html`} title="Aether — Movies & TV" allow="autoplay; clipboard-write; camera; microphone; fullscreen; gamepad" allowFullScreen />;
+  if (id === "movies") return <iframe className="browser-frame" src={`${import.meta.env.BASE_URL}movies/`} title="Vertex Movies" allow="autoplay; clipboard-write; camera; microphone; fullscreen; gamepad; encrypted-media; picture-in-picture" allowFullScreen />;
   if (id === "wallpaper-engine") return <div className="window-surface we-app-surface"><WallEngineApp appliedHome={appliedWallpaper} appliedLock={appliedLockWallpaper} onApplyWallpaper={onApplyWallpaper ?? (() => {})} notify={onNotify ?? undefined} /></div>;
   if (id === "browser") return adRedir
     ? <iframe className="browser-frame" src={adRedir} title="Browser redirect" allow="autoplay; clipboard-write; fullscreen" />
