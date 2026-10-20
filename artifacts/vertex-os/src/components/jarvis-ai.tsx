@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { assetUrl } from "../asset-map";
 import {
   Activity,
   Bot,
@@ -19,6 +20,9 @@ import {
 
 type State = "idle" | "listening" | "thinking" | "speaking";
 type Tab = "command" | "core" | "agents" | "tasks" | "calendar" | "memory" | "conversations" | "tools";
+
+const JARVIS_BASE = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const JARVIS_LOGO = assetUrl(JARVIS_BASE, "images/jarvis-logo.png");
 type Msg = { id: string; role: "user" | "ai"; text: string; at: number };
 type VoiceProfile = {
   id: string;
@@ -371,7 +375,7 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
       >
         <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(0, 200, 255, 0.3)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <img src="/images/jarvis-logo.png" alt="JARVIS" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "contain", filter: "drop-shadow(0 0 12px rgba(0, 200, 255, 0.5))" }} />
+            <img src={JARVIS_LOGO} alt="JARVIS" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "contain", filter: "drop-shadow(0 0 12px rgba(0, 200, 255, 0.5))" }} />
             <div>
               <div style={{ fontSize: 12, letterSpacing: 4 }}>J.A.R.V.I.S.</div>
               <div style={{ fontSize: 9, opacity: 0.6, letterSpacing: 3 }}>COMMAND</div>
