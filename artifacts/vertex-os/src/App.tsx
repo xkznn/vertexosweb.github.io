@@ -6,13 +6,14 @@ import {
   Code2, Compass, Cpu, Download, Eye, Gamepad2, Grid2X2,
   Image, LayoutGrid, LockKeyhole, Menu, MessageCircle, Minus, MonitorCog, Music2,
   Palette, Pin, PinOff, Play, Power, Puzzle, Radio, Rocket, RotateCcw,
-  Settings2, ShieldBan, SlidersHorizontal, Search, Sparkles, Terminal, Volume2, VolumeX, Waves, X, Pause, Maximize, Maximize2, Minimize2, House, Plus, Package, EyeOff, ExternalLink, Contrast, Calculator,
+  Settings2, ShieldBan, SlidersHorizontal, Search, Sparkles, Terminal, Volume2, VolumeX, Waves, X, Pause, Maximize, Maximize2, Minimize2, House, Plus, Package, EyeOff, ExternalLink, Contrast, Calculator, ImagePlus,
   Shuffle, Repeat, Clock, ListVideo, Trash2, Link2, User, Languages, Info, Monitor, Paintbrush, SunMoon, Cloud, FileDown, Clapperboard,
 } from "lucide-react";
 
 
 import { Ps5EmulatorSurface } from "./components/ps5-emulator";
 import { VerAiSurface } from "./components/ver-ai";
+import { JarvisSurface } from "./components/jarvis-ai";
 import { BrowserSurface, ProxyUrlFrame } from "./components/browser-app";
 import moviesAppHtml from "./movies/app.html?raw";
 import { VertexStudioWallpaper } from "./components/vertex-wallpaper";
@@ -39,7 +40,7 @@ import { PERF } from "./perf";
 import { GhostPayloadCard, GhostViewSurface, captureScreenHtml, ghostDeliver, ghostExecute, ghostProbe, ghostSetSnapGetter, ghostSetStatus, ghostStop, ghostUiStore, snapSig, startGhostView, useGhostViewUi, type GvIncoming, type GvSnap, type GvWindow } from "./ghostview";
 import { getMediaSession, setMediaSession, notifyMediaSession, subscribeMediaSession, type MediaSession } from "./now-playing";
 type WallpaperId = "vertex-studio" | "halloween" | "macos-default" | "macos-lock" | "singularity" | "snake-skeleton" | "snow-fox" | "cine55" | "gojo" | "rainy-city" | "green-anime" | "brother" | "99-med" | "gojo-sukuna" | "sukuna-fire" | "desktop-lines" | "skello" | "we-black-hole" | "we-snow-fox" | "we-gojo-sukuna" | "we-sukuna-fire" | "we-cine-55" | "we-snake" | "we-green-anime" | "we-brother" | "we-gojo" | "we-rainy-city" | "we-desktop-lines" | "we-skello" | "we-99-med" | "we-45e33" | "we-f1-formula" | "we-hunt-shadow-2" | "we-minecraft-01" | "we-minecraft-02" | "we-minecraft-03" | "we-monkey" | "we-supra-drift" | "we-yuji-52" | "we-cozy-fox" | "we-yuta" | "we-bmw-car-driving" | "we-eyes-toward-heaven" | "we-goku-ultra" | "we-galaxy-eyes" | "we-celestial-battle" | "we-tess-kotkin" | "we-yuta-rika" | "we-satoru-gojo" | "we-dark-angel" | "we-makima-devilish" | "we-makima-burning" | "we-haimiya-mio" | "we-toji" | "we-mamonir" | "we-lantern-festival" | "we-miyabi" | "we-qingxiao" | "we-megumin" | "we-odette" | "we-blue-sky" | "we-frutiger" | "we-synthwave-dmc" | "we-zankou" | "we-ghost-rider" | "we-molala" | "we-dark-king" | "we-celestial-veil" | "we-miku-nakano" | "we-gotoubun" | "we-quintuplets" | "we-black-silk-waves" | "we-blue-dragon-logo" | "we-astra-yao" | "we-luo-tianyi-christmas" | "we-mc-northern-light" | "we-mc-falling-snow" | "we-mc-aquarium" | "we-mc-holiday-heart" | "we-mc-fireplace" | "we-mc-panels" | "we-mc-cherry-blossom" | "we-mc-raindrops" | "we-silver-surfer" | "we-girl-behind-curtains" | "we-vagabond-miyamoto" | "we-itachi-crow" | "we-gojo-hollow" | "we-quintuplets-sister" | "we-yuta-okkotsu" | "we-gojo-vs-sukuna-2" | "we-gojo-cursed-world" | "we-gojo-six-eyes" | "we-frieren-blue-horizon" | "we-frieren-blooming-stream" | "we-nissan-skyline-r33-mc" | "we-torii";
-type AppId = "hub" | "spicetify" | "browser" | "pizza" | "roblox" | "messages" | "verai" | "vertube" | "movies" | "settings" | "games" | "translucenttb" | "wallpaper-engine" | "minecraft" | "rainmeter" | "terminal" | "calculator" | "ghostview" | "links" | "discord" | "vcloud" | "admin";
+type AppId = "hub" | "spicetify" | "browser" | "pizza" | "roblox" | "messages" | "verai" | "jarvis" | "vertube" | "movies" | "settings" | "games" | "translucenttb" | "wallpaper-engine" | "minecraft" | "rainmeter" | "terminal" | "calculator" | "ghostview" | "links" | "discord" | "vcloud" | "admin";
 type Ps5DesktopShortcut = { id: string; name: string; cover: string };
 type TaskbarPos = "bottom" | "top" | "left" | "right";
 type WindowRect = { x: number; y: number; w: number; h: number };
@@ -47,8 +48,9 @@ type WindowState = { id: AppId; minimized: boolean; maximized: boolean; rect: Wi
 type Wallpaper = { id: WallpaperId; name: string; meta: string; video?: string; image?: string; videoLow?: string };
 type ColorMode = "dark" | "light";
 type SystemStyle = "vertex" | "macos";
-type SystemSettings = { optimized: boolean; fastBoot: boolean; idleLock: boolean; confirm: boolean; cloak: string; cloakName: string; cloakIcon: string; panicKey: string; panicUrl: string; adblock: boolean; adblockUrl: string; deviceName: string; colorMode: ColorMode; systemStyle: SystemStyle; fontStyle: string };
-const defaultSettings: SystemSettings = { optimized: false, fastBoot: false, idleLock: false, confirm: false, cloak: "none", cloakName: "Vertex-OS", cloakIcon: "", panicKey: "`", panicUrl: "", adblock: false, adblockUrl: "", deviceName: "VERTEX-PC", colorMode: "dark", systemStyle: "vertex", fontStyle: "vertex" };
+type TabHideImage = { id: string; name: string; src: string };
+type SystemSettings = { optimized: boolean; fastBoot: boolean; idleLock: boolean; confirm: boolean; cloak: string; cloakName: string; cloakIcon: string; panicKey: string; panicUrl: string; adblock: boolean; adblockUrl: string; deviceName: string; colorMode: ColorMode; systemStyle: SystemStyle; fontStyle: string; tabHide: boolean; tabHideImage: string; tabHideImages: TabHideImage[] };
+const defaultSettings: SystemSettings = { optimized: false, fastBoot: false, idleLock: false, confirm: false, cloak: "none", cloakName: "Vertex-OS", cloakIcon: "", panicKey: "`", panicUrl: "", adblock: false, adblockUrl: "", deviceName: "VERTEX-PC", colorMode: "dark", systemStyle: "vertex", fontStyle: "vertex", tabHide: false, tabHideImage: "iready", tabHideImages: [{ id: "black", name: "Black screen", src: "black" }, { id: "white", name: "White screen", src: "white" }, { id: "iready", name: "I-Ready", src: "/images/tabhide-iready.png" }, { id: "classroom", name: "Google Classroom", src: "/images/tabhide-classroom.png" }] };
 const PASSWORD_KEY = "vertex-password";
 const PROFILE_KEY = "vertex-profile";
 const ACCOUNTS_KEY = "vertex-accounts";
@@ -389,6 +391,7 @@ const apps: { id: AppId; title: string; subtitle: string; icon: LucideIcon; icon
   { id: "roblox", title: "Roblox", subtitle: t("appSub.roblox"), icon: Gamepad2, iconImg: asset("images/roblox.ico"), pinned: true },
   { id: "messages", title: "Messages", subtitle: t("appSub.messages"), icon: MessageCircle, iconImg: asset("images/messages-icon.webp"), pinned: true },
   { id: "verai", title: "VER-AI", subtitle: t("appSub.verai"), icon: Sparkles, iconImg: asset("images/ver-ai.ico"), pinned: true },
+  { id: "jarvis", title: "JARVIS AI", subtitle: "Iron Man AI Assistant", icon: Sparkles, iconImg: "/images/jarvis-logo.png", pinned: true, squircle: true },
   { id: "vertube", title: "VER-TUBE", subtitle: "watch any video, no account", icon: Play, iconImg: "https://www.youtube.com/s/desktop/af0a3c1e/img/favicon_144x144.png", pinned: true },
   { id: "movies", title: "Netflix", subtitle: "movies & TV shows — free", icon: Clapperboard, iconImg: "https://cdn.worldvectorlogo.com/logos/netflix-logo-icon.svg", pinned: true },
   { id: "settings", title: "Config", subtitle: t("appSub.settings"), icon: Settings2, iconImg: asset("images/config-icon.png"), pinned: true },
@@ -407,7 +410,7 @@ type AppOverride = { name?: string; showName?: boolean; iconUrl?: string; pinned
 
 const APP_SECTIONS: { id: string; tone: string; all?: boolean; ids: AppId[] }[] = [
   { id: "all", tone: "tone-all", all: true, ids: [] },
-  { id: "watch", tone: "tone-watch", ids: ["vertube", "movies", "spicetify", "messages", "verai"] },
+  { id: "watch", tone: "tone-watch", ids: ["vertube", "movies", "spicetify", "messages", "verai", "jarvis"] },
   { id: "play", tone: "tone-play", ids: ["roblox", "minecraft", "games", "pizza", "vcloud"] },
   { id: "create", tone: "tone-create", ids: ["terminal", "wallpaper-engine", "browser", "calculator", "hub", "settings", "translucenttb", "rainmeter", "ghostview", "links"] },
 ];
@@ -1067,7 +1070,10 @@ function App() {
   const [wpPickerOpen, setWpPickerOpen] = useState(false);
   const [customWallpapers, setCustomWallpapers] = useState<PickerWallpaper[]>(() => readCustomWallpapersLocal());
   const [customsLoaded, setCustomsLoaded] = useState(false);
-  const [wppInstalled, setWppInstalled] = useState<boolean>(() => storage.read("vertex-wpp-installed", false));
+const [wppInstalled, setWppInstalled] = useState<boolean>(() => 
+storage.read("vertex-wpp-installed", false));
+const [jarvisInstalled, setJarvisInstalled] = useState<boolean>(() => 
+storage.read("vertex-jarvis-installed", false));
   const [startOpen, setStartOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [dockOverflowOpen, setDockOverflowOpen] = useState(false);
@@ -1272,6 +1278,11 @@ function App() {
   const [settings, setSettings] = useState<SystemSettings>(() => {
     const loaded = { ...defaultSettings, ...storage.read<Partial<SystemSettings>>("vertex-settings", {}) };
     if (loaded.cloak === "canvas") loaded.cloak = "none";
+    if (!Array.isArray(loaded.tabHideImages) || !loaded.tabHideImages.length) loaded.tabHideImages = defaultSettings.tabHideImages;
+    else {
+      const builtins = defaultSettings.tabHideImages.filter((item) => !loaded.tabHideImages!.some((saved) => saved.id === item.id));
+      loaded.tabHideImages = [...builtins, ...loaded.tabHideImages];
+    }
     return loaded;
   });
 
@@ -1441,6 +1452,22 @@ onSessionClose: (peerCode) => {
     link.href = cloak.icon || asset("favicon.svg");
   }, [settings.cloak, settings.cloakName, settings.cloakIcon]);
 
+  const [tabHidden, setTabHidden] = useState(false);
+  useEffect(() => {
+    if (!settings.tabHide) { setTabHidden(false); return; }
+    const onBlur = () => setTabHidden(true);
+    const onFocus = () => setTabHidden(false);
+    const onVis = () => setTabHidden(document.hidden);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [settings.tabHide]);
+
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = settings.colorMode === "light" ? "light" : "dark";
@@ -1483,7 +1510,8 @@ onSessionClose: (peerCode) => {
 
   useEffect(() => {
     storage.write("vertex-wpp-installed", wppInstalled);
-  }, [wppInstalled]);
+    storage.write("vertex-jarvis-installed", jarvisInstalled);
+  }, [wppInstalled, jarvisInstalled]);
   const filteredApps = useMemo(() => apps.filter((app) => getApp(app.id, appOverrides).title.toLowerCase().includes(drawerQuery.toLowerCase())), [drawerQuery, appOverrides, apps]);
   const pinnedApps = useMemo(() => apps.filter((app) => { const themed = getApp(app.id, appOverrides); return (appOverrides[app.id]?.pinned ?? app.pinned) && themed.title.toLowerCase().includes(startQuery.toLowerCase()); }), [startQuery, appOverrides, apps]);
   const activeSection = useMemo(() => APP_SECTIONS.find((s) => s.id === drawerSection) ?? null, [drawerSection]);
@@ -1822,8 +1850,9 @@ onSessionClose: (peerCode) => {
     addToast(t("lock.forgotDoneTitle"), t("lock.forgotDoneCopy"));
   }
 
-  function updateSetting(key: keyof SystemSettings, value: boolean | string) {
-    const next = { ...settings, [key]: value };
+  function updateSetting(key: keyof SystemSettings | Partial<SystemSettings>, value?: boolean | string | TabHideImage[]) {
+    const patch = typeof key === "string" ? { [key]: value } : key;
+    const next = { ...settings, ...patch } as SystemSettings;
     setSettings(next);
     storage.write("vertex-settings", next);
   }
@@ -2383,7 +2412,7 @@ onSessionClose: (peerCode) => {
           })}
         </div>
 
-        <WindowLayer windows={windows} activeWindow={activeWindow} onFocus={setActiveWindow} onClose={closeWindow} onMinimize={minimizeWindow} onMaximize={toggleMaximize} onMove={moveWindow} settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} lang={chosenLang} onLanguagePick={pickLanguage} onPanic={redirectPanic} onTrackChange={setCurrentTrack} translucent={translucentTB} onTranslucent={setTranslucentTB} onApplyWallpaper={applyWallEngine} appliedWallpaper={wallpaper} appliedLockWallpaper={lockWallpaper} onNotify={addToast} wppInstalled={wppInstalled} onInstallPicker={() => { installWallpaperPicker(); setStartOpen(false); setDrawerOpen(false); addToast("Quick Wallpaper Picker", "Installed — press Alt+W to open it."); }} onFsociety={setFsocietyOverride} appOverrides={appOverrides} activeAccount={activeAccount} onAvatarChange={updateActiveAvatar} onAccountChange={updateActiveAccount} />
+        <WindowLayer windows={windows} activeWindow={activeWindow} onFocus={setActiveWindow} onClose={closeWindow} onMinimize={minimizeWindow} onMaximize={toggleMaximize} onMove={moveWindow} settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} lang={chosenLang} onLanguagePick={pickLanguage} onPanic={redirectPanic} onTrackChange={setCurrentTrack} translucent={translucentTB} onTranslucent={setTranslucentTB} onApplyWallpaper={applyWallEngine} appliedWallpaper={wallpaper} appliedLockWallpaper={lockWallpaper} onNotify={addToast} wppInstalled={wppInstalled} onInstallPicker={() => { installWallpaperPicker(); setStartOpen(false); setDrawerOpen(false); addToast("Quick Wallpaper Picker", "Installed — press Alt+W to open it."); }} onJarvisInstall={() => setJarvisInstalled(true)} jarvisInstalled={jarvisInstalled} onFsociety={setFsocietyOverride} appOverrides={appOverrides} activeAccount={activeAccount} onAvatarChange={updateActiveAvatar} onAccountChange={updateActiveAccount} />
 
         <div className={`tb-hotzone tb-hotzone--${taskbarPos}`} aria-hidden="true" />
 
@@ -2464,7 +2493,7 @@ onSessionClose: (peerCode) => {
                   <div className="task-preview-window" style={{ width: rw, height: rh, transform: `scale(${scale})`, transformOrigin: "top left" }}>
                     <header className="window-bar"><span className="window-title"><span className="window-app-icon"><AppIcon app={themed} size={13} /></span><span className="window-title-text">{themed.title}</span></span></header>
                     <div className="window-body">
-                      {renderWindowBody(win.id, settings, updateSetting, faqOpen, setFaqOpen, chosenLang, pickLanguage, redirectPanic, null, null, setCurrentTrack, translucentTB, setTranslucentTB, applyWallEngine, wallpaper, lockWallpaper, addToast, wppInstalled, () => { installWallpaperPicker(); setStartOpen(false); setDrawerOpen(false); addToast("Quick Wallpaper Picker", "Installed — press Alt+W to open it."); }, setFsocietyOverride, activeAccount, updateActiveAvatar, updateActiveAccount)}
+                       {renderWindowBody(win.id, settings, updateSetting, faqOpen, setFaqOpen, chosenLang, pickLanguage, redirectPanic, null, null, setCurrentTrack, translucentTB, setTranslucentTB, applyWallEngine, wallpaper, lockWallpaper, addToast, wppInstalled, () => { installWallpaperPicker(); setStartOpen(false); setDrawerOpen(false); addToast("Quick Wallpaper Picker", "Installed — press Alt+W to open it."); }, jarvisInstalled, () => setJarvisInstalled(true), setFsocietyOverride, activeAccount, updateActiveAvatar, updateActiveAccount)}
                     </div>
                   </div>
                 </PreviewBoundary>
@@ -2716,11 +2745,19 @@ onSessionClose: (peerCode) => {
 
       {mobileWarning && <div className="mobile-warning" onDoubleClick={() => setMobileWarning(false)}><div className="mobile-warning-card"><div className="mobile-warning-kicker">{t("mobile.kicker")}</div><h2>{t("mobile.title")}</h2><p>{t("mobile.copy")}</p><button className="primary-button" onClick={() => setMobileWarning(false)} data-testid="button-continue-mobile">{t("mobile.continue")}</button></div></div>}
       <div className="toast-stack">{toasts.map((toast) => toast.href ? <a className="toast" key={toast.id} href={toast.href} target="_blank" rel="noopener noreferrer" onClick={() => setToasts((items) => items.filter((item) => item.id !== toast.id))}><strong>{toast.title}</strong><span>{toast.copy}</span></a> : <button className="toast" key={toast.id} onClick={() => setToasts((items) => items.filter((item) => item.id !== toast.id))}><strong>{toast.title}</strong><span>{toast.copy}</span></button>)}</div>
+      {settings.tabHide && tabHidden && (() => {
+        const img = settings.tabHideImages.find((item) => item.id === settings.tabHideImage) ?? settings.tabHideImages[0];
+        if (!img) return null;
+        if (img.src === "black" || img.src === "white") return <div className="tab-hide-overlay" style={{ background: img.src === "black" ? "#000" : "#fff" }} aria-hidden="true" />;
+        return <div className="tab-hide-overlay" aria-hidden="true"><img src={img.src} alt="" /></div>;
+      })()}
     </main>
   );
 }
 
-function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, onMaximize, onMove, settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic, onTrackChange, translucent, onTranslucent, onApplyWallpaper, appliedWallpaper, appliedLockWallpaper, onNotify, wppInstalled, onInstallPicker, onFsociety, appOverrides, activeAccount, onAvatarChange, onAccountChange }: {
+function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, onMaximize, onMove, settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic, onTrackChange, translucent, onTranslucent, onApplyWallpaper, appliedWallpaper, appliedLockWallpaper, onNotify, wppInstalled, onInstallPicker, jarvisInstalled, onJarvisInstall, onFsociety, appOverrides, activeAccount, onAvatarChange, onAccountChange }: {
+  jarvisInstalled?: boolean;
+  onJarvisInstall?: () => void;
   windows: WindowState[];
   activeWindow: AppId | null;
   onFocus: (id: AppId) => void;
@@ -2729,7 +2766,7 @@ function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, onMa
   onMaximize: (id: AppId) => void;
   onMove: (id: AppId, x: number, y: number) => void;
   settings: SystemSettings;
-  updateSetting: (key: keyof SystemSettings, value: boolean | string) => void;
+    updateSetting: (key: keyof SystemSettings | Partial<SystemSettings>, value?: boolean | string | TabHideImage[]) => void;
   faqOpen: number | null;
   setFaqOpen: (value: number | null) => void;
   lang: Lang;
@@ -2809,7 +2846,7 @@ function WindowLayer({ windows, activeWindow, onFocus, onClose, onMinimize, onMa
           </div>
         </>}
       </header>
-      <div className="window-body">{renderWindowBody(win.id, settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic, () => onClose(win.id), () => onMinimize(win.id), onTrackChange, translucent, onTranslucent, onApplyWallpaper, appliedWallpaper, appliedLockWallpaper, onNotify, wppInstalled, onInstallPicker, onFsociety, activeAccount, onAvatarChange, onAccountChange)}</div>
+      <div className="window-body">{renderWindowBody(win.id, settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic, () => onClose(win.id), () => onMinimize(win.id), onTrackChange, translucent, onTranslucent, onApplyWallpaper, appliedWallpaper, appliedLockWallpaper, onNotify, wppInstalled, onInstallPicker, jarvisInstalled, onJarvisInstall, onFsociety, activeAccount, onAvatarChange, onAccountChange)}</div>
     </article>;
   })}</div>;
 }
@@ -3388,9 +3425,12 @@ const TERM_HELP_ROWS: [string, string][] = [
   ["!sudo IpConfig", "your own public IP + network recon"],
   ["!sudo curl fetch Metasploit.com download", "install the metasploit framework (needs fsociety)"],
   ["!run metasploit", "open the METASPLOIT TOOL tab"],
+  ["!sudo install jarvis", "install JARVIS AI — Iron Man assistant"],
+  ["!sudo install JARVIS", "install JARVIS AI — Iron Man assistant"],
+  ["jarvis", "open JARVIS AI"],
 ];
 
-function TerminalSurface({ installed, onInstalled, onFsociety }: { installed: boolean; onInstalled: () => void; onFsociety: (active: boolean) => void }) {
+function TerminalSurface({ installed, onInstalled, onFsociety, jarvisInstalled, setJarvisInstalled, onJarvisInstall, toggleApp }: { installed: boolean; onInstalled: () => void; onFsociety: (active: boolean) => void; jarvisInstalled?: boolean; setJarvisInstalled?: (v: boolean) => void; onJarvisInstall?: () => void; toggleApp?: (id: AppId) => void }) {
   const [config, setConfig] = useState<TerminalConfig>(() => readTerminalConfig());
   const [introVisible, setIntroVisible] = useState<boolean>(() => config.bannerEnabled);
   const [tab, setTab] = useState<"terminal" | "settings" | "metasploit">("terminal");
@@ -3874,6 +3914,44 @@ function TerminalSurface({ installed, onInstalled, onFsociety }: { installed: bo
         p("");
         onFsociety(true);
       }, elapsed);
+      return;
+    }
+
+    if (cmd === "sudo install jarvis" || cmd === "!sudo install jarvis" || cmd === "sudo install JARVIS" || cmd === "!sudo install JARVIS" || /^!?sudo\s+install\s+jarvis$/i.test(cmd)) {
+      if (jarvisInstalled) {
+        pa("\u001b[33m!sudo install: JARVIS AI is \u001b[1malready installed\u001b[0m\u001b[33m. Try: \u001b[1mjarvis\u001b[0m to open it.");
+        p("");
+        return;
+      }
+      const stages: { ms: number; line: ReactNode }[] = [
+        { ms: 200, line: <span className="term-out">!sudo install: initializing JARVIS core…</span> },
+        { ms: 250, line: <span className="term-out">  ▸ neural matrix · calibrating…</span> },
+        { ms: 250, line: <span className="term-out">  ▸ voice synthesis · connecting to Fish Audio…</span> },
+        { ms: 250, line: <span className="term-out">  ▸ language model · linking to Groq API…</span> },
+        { ms: 250, line: <span className="term-success">  ▸ JARVIS AI · ready</span> },
+      ];
+      let elapsed = 0;
+      for (const stage of stages) {
+        elapsed += stage.ms;
+        window.setTimeout(() => p(stage.line), elapsed);
+      }
+      window.setTimeout(() => {
+        if (setJarvisInstalled) setJarvisInstalled(true);
+        if (onJarvisInstall) onJarvisInstall();
+        pa("");
+        pa("\u001b[38;5;51mJ A R V I S   A I   ·   i n s t a l l e d\u001b[0m");
+        pa("");
+        pa("\u001b[32m✓\u001b[0m JARVIS AI is now available. Type \u001b[1mjarvis\u001b[0m or open it from Start.");
+        p("");
+      }, elapsed);
+      return;
+    }
+
+    if (cmd === "jarvis") {
+      if (toggleApp) toggleApp("jarvis" as AppId);
+      else (window as any).openJarvis?.();
+      pa("\u001b[32mOpening JARVIS AI...\u001b[0m");
+      p("");
       return;
     }
 
@@ -5487,9 +5565,9 @@ function VerTubeSurface() {
   );
 }
 
-function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (key: keyof SystemSettings, value: boolean | string) => void, faqOpen: number | null, setFaqOpen: (value: number | null) => void, lang: Lang, onLanguagePick: (language: Lang) => void, onPanic: () => void, onClose: (() => void) | null = null, onMinimize: (() => void) | null = null, onTrackChange: ((track: { name: string; artist: string; artwork: string } | null) => void) | null = null, translucent: boolean = false, onTranslucent: ((value: boolean) => void) | null = null, onApplyWallpaper: ((id: WallpaperId, target: "both" | "home" | "lock") => void) | null = null, appliedWallpaper: WallpaperId = "singularity", appliedLockWallpaper: WallpaperId = "singularity", onNotify: ((title: string, copy: string) => void) | null = null, wppInstalled: boolean = false, onInstallPicker: (() => void) | null = null, onFsociety: ((active: boolean) => void) | null = null, activeAccount: VertexAccount | null = null, onAvatarChange: ((avatar: string) => void) | null = null, onAccountChange: ((patch: { name?: string; email?: string }) => void) | null = null) {
+function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (key: keyof SystemSettings | Partial<SystemSettings>, value?: boolean | string | TabHideImage[]) => void, faqOpen: number | null, setFaqOpen: (value: number | null) => void, lang: Lang, onLanguagePick: (language: Lang) => void, onPanic: () => void, onClose: (() => void) | null = null, onMinimize: (() => void) | null = null, onTrackChange: ((track: { name: string; artist: string; artwork: string } | null) => void) | null = null, translucent: boolean = false, onTranslucent: ((value: boolean) => void) | null = null, onApplyWallpaper: ((id: WallpaperId, target: "both" | "home" | "lock") => void) | null = null, appliedWallpaper: WallpaperId = "singularity", appliedLockWallpaper: WallpaperId = "singularity", onNotify: ((title: string, copy: string) => void) | null = null, wppInstalled: boolean = false, onInstallPicker: (() => void) | null = null, jarvisInstalled: boolean = false, onJarvisInstall: (() => void) | null = null, onFsociety: ((active: boolean) => void) | null = null, activeAccount: VertexAccount | null = null, onAvatarChange: ((avatar: string) => void) | null = null, onAccountChange: ((patch: { name?: string; email?: string }) => void) | null = null) {
   if (id === "settings") return <SettingsSurface settings={settings} updateSetting={updateSetting} faqOpen={faqOpen} setFaqOpen={setFaqOpen} lang={lang} onLanguagePick={onLanguagePick} onPanic={onPanic} avatar={activeAccount?.avatar} accountName={activeAccount?.name} accountEmail={activeAccount?.email} onAvatarChange={onAvatarChange ?? undefined} onAccountChange={onAccountChange ?? undefined} appliedWallpaper={appliedWallpaper} appliedLockWallpaper={appliedLockWallpaper} onApplyWallpaper={onApplyWallpaper ?? undefined} onNotify={onNotify ?? undefined} />;
-  if (id === "terminal") return <div className="window-surface term-app-surface"><TerminalSurface installed={wppInstalled} onInstalled={onInstallPicker ?? (() => {})} onFsociety={onFsociety ?? (() => {})} /></div>;
+  if (id === "terminal") return <div className="window-surface term-app-surface">          <TerminalSurface installed={wppInstalled} onInstalled={onInstallPicker ?? (() => {})} onFsociety={onFsociety ?? (() => {})} jarvisInstalled={jarvisInstalled} setJarvisInstalled={onJarvisInstall ?? (() => {})} onJarvisInstall={onJarvisInstall ?? (() => {})} toggleApp={undefined} /></div>;
   if (id === "translucenttb") return <div className="window-surface"><div className="surface-kicker">{t("surf.translucent.kicker")}</div><h2 className="surface-title">{t("surf.translucent.title")}</h2><p className="surface-copy">{t("surf.translucent.body")}</p><div className="settings-list"><SettingToggle label={t("surf.translucent.enable")} help={t("surf.translucent.help")} value={translucent} onChange={(value) => onTranslucent?.(value)} /></div></div>;
   if (id === "spicetify") return <CinefySurface onClose={onClose ?? (() => undefined)} onMinimize={onMinimize ?? (() => undefined)} onTrackChange={onTrackChange ?? (() => undefined)} />;
   const adRedir = settings.adblock && settings.adblockUrl.trim() ? settings.adblockUrl : null;
@@ -5504,6 +5582,7 @@ function renderWindowBody(id: AppId, settings: SystemSettings, updateSetting: (k
   if (id === "roblox") return <ProxyUrlFrame url={adRedir ?? "https://73.ip.nowgg.fun/apps/a/19900/b.html"} title="Roblox" />;
   if (id === "messages") return <div className="window-surface msgs-surface"><MessagesSurface /></div>;
   if (id === "verai") return <div className="window-surface verai-surface"><VerAiSurface /></div>;
+  if (id === "jarvis") return <div className="window-surface verai-surface"><JarvisSurface onOpenApp={(appId) => { /* opening handled by parent */ }} /></div>;
   if (id === "vertube") return <div className="window-surface vertube-surface"><VerTubeSurface /></div>;
   if (id === "ghostview") return <div className="window-surface gv-app-surface"><GhostViewSurface wallpaperResolve={wallImg} onStop={() => { onClose?.(); }} /></div>;
   if (id === "games") return <div className="window-surface ps5-app-surface"><Ps5EmulatorSurface surfaces={{ spotify: CinefySurface, verTube: VerTubeSurface }} /></div>;
@@ -5944,7 +6023,7 @@ const FONT_STYLES: { id: string; label: string; note: string; family: string }[]
 
 function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, onLanguagePick, onPanic, avatar, accountName, accountEmail, onAvatarChange, onAccountChange, appliedWallpaper, appliedLockWallpaper, onApplyWallpaper, onNotify }: {
   settings: SystemSettings;
-  updateSetting: (key: keyof SystemSettings, value: boolean | string) => void;
+    updateSetting: (key: keyof SystemSettings | Partial<SystemSettings>, value?: boolean | string | TabHideImage[]) => void;
   faqOpen: number | null;
   setFaqOpen: (value: number | null) => void;
   lang: Lang;
@@ -5972,6 +6051,8 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, o
   const [passwordDraft, setPasswordDraft] = useState("");
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [blankNotice, setBlankNotice] = useState<string | null>(null);
+  const [tabHideNotice, setTabHideNotice] = useState<string | null>(null);
+  const [tabHidePreview, setTabHidePreview] = useState(false);
   const [offlineBusy, setOfflineBusy] = useState(false);
   const [offlineNote, setOfflineNote] = useState<string | null>(null);
   const hasPassword = Boolean(storage.read<string>(PASSWORD_KEY, ""));
@@ -6301,6 +6382,17 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, o
             {blankNotice && <p className="term-error">{blankNotice}</p>}
           </section>
           <section className="win-settings-card">
+            <div className="setting-group"><EyeOff size={13} /> Tab Hiding</div>
+            <SettingToggle label="Blur overlay" help="Show a fake image when this tab loses focus, then restore Vertex-OS when you come back." value={settings.tabHide} onChange={(value) => updateSetting("tabHide", value)} />
+            {settings.tabHide && <>
+              <div className="setting-row"><div><strong>Overlay picture</strong><small>What shows while you are away.</small></div><select className="setting-select" value={settings.tabHideImage} onChange={(event) => updateSetting("tabHideImage", event.target.value)} aria-label="Overlay picture">{settings.tabHideImages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+              <div className="setting-action-row"><label className="outline-button" style={{ cursor: "pointer" }}><ImagePlus size={13} /> Add custom image<input type="file" accept="image/*,.gif" style={{ display: "none" }} onChange={async (event) => { const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; try { const src = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); }); const id = `custom-${Date.now()}`; updateSetting({ tabHideImages: [...settings.tabHideImages, { id, name: file.name, src }], tabHideImage: id }); setTabHideNotice("Custom image added."); } catch { setTabHideNotice("Could not read that image."); } }} /></label><span>Use any picture or GIF as your tab-hiding screen.</span></div>
+              {settings.tabHideImages.some((item) => item.id.startsWith("custom-")) && <div className="setting-row"><div><strong>Remove custom</strong><small>Delete a custom picture you added.</small></div><button className="outline-button" onClick={() => { const custom = settings.tabHideImages.filter((item) => item.id.startsWith("custom-")); if (!custom.length) return; const id = window.prompt(`Remove which custom image?\n${custom.map((item) => item.name).join("\n")}`); const match = custom.find((item) => item.name === id) ?? custom.find((item) => item.id === id); if (!match) return; const nextImages = settings.tabHideImages.filter((item) => item.id !== match.id); updateSetting(settings.tabHideImage === match.id ? { tabHideImages: nextImages, tabHideImage: nextImages[0]?.id ?? "" } : { tabHideImages: nextImages }); setTabHideNotice("Custom image removed."); }}>Remove image</button></div>}
+              {tabHideNotice && <p className="term-error">{tabHideNotice}</p>}
+              <div className="setting-action-row"><button className="outline-button" onClick={() => { setTabHideNotice(null); setTabHidePreview(true); window.setTimeout(() => setTabHidePreview(false), 4000); }}>Preview overlay</button><span>Shows the overlay for 4 seconds so you can see it.</span></div>
+            </>}
+          </section>
+          <section className="win-settings-card">
             <div className="setting-group"><MonitorCog size={13} /> {t("set.groupShortcut")}</div>
             <div className="setting-row"><div><strong>{t("set.panicKeyLabel")}</strong><small>{t("set.panicKeyHelp")}</small></div><input className="setting-input" value={settings.panicKey} maxLength={1} onChange={(event) => updateSetting("panicKey", event.target.value)} aria-label={t("set.panicKeyLabel")} /></div>
             <div className="setting-row setting-stack"><div><strong>{t("set.panicSiteLabel")}</strong><small>{t("set.panicSiteHelp")}</small></div><input className="setting-input setting-url" type="url" value={settings.panicUrl} placeholder="https://classroom.google.com/" onChange={(event) => updateSetting("panicUrl", event.target.value)} aria-label={t("set.panicSiteLabel")} /></div>
@@ -6369,6 +6461,12 @@ function SettingsSurface({ settings, updateSetting, faqOpen, setFaqOpen, lang, o
           ) : renderPane()}
         </div>
       </div>
+      {settings.tabHide && tabHidePreview && (() => {
+        const img = settings.tabHideImages.find((item) => item.id === settings.tabHideImage) ?? settings.tabHideImages[0];
+        if (!img) return null;
+        if (img.src === "black" || img.src === "white") return <div className="tab-hide-overlay" style={{ background: img.src === "black" ? "#000" : "#fff" }} aria-hidden="true" />;
+        return <div className="tab-hide-overlay" aria-hidden="true"><img src={img.src} alt="" /></div>;
+      })()}
     </div>
   );
 }
