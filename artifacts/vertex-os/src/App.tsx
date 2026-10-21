@@ -1017,6 +1017,7 @@ function AppIcon({ app, size = 21 }: { app: { icon: LucideIcon; iconImg?: string
 function App() {
   const [phase, setPhase] = useState<"boot" | "profile" | "lock" | "picker" | "signin" | "desktop">("boot");
   const [bootVideo, setBootVideo] = useState(false);
+  const [blockedHidden, setBlockedHidden] = useState(false);
   const [accounts, setAccounts] = useState<VertexAccount[]>(() => readAccounts());
   const [activeAccount, setActiveAccount] = useState<VertexAccount | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<VertexAccount | null>(null);
@@ -1558,6 +1559,38 @@ onSessionClose: (peerCode) => {
   useEffect(() => {
     document.documentElement.lang = LANG;
   }, []);
+
+  useEffect(() => {
+    if (blockedHidden) return;
+    const prevTitle = document.title;
+    document.title = "Page Blocked";
+    let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    const prevHref = favicon?.href ?? "";
+    if (!favicon) {
+      favicon = document.createElement("link");
+      favicon.rel = "icon";
+      document.head.appendChild(favicon);
+    }
+    favicon.type = "image/png";
+    favicon.href = asset("assets/favicon.png");
+    let count = 0;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.code === "Space" || event.key === " ") {
+        event.preventDefault();
+        count += 1;
+        if (count >= 5) {
+          setBlockedHidden(true);
+          document.title = prevTitle;
+          if (favicon) favicon.href = prevHref || asset("vertex-hub-logo.png");
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      document.title = prevTitle;
+    };
+  }, [blockedHidden]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -2125,6 +2158,17 @@ onSessionClose: (peerCode) => {
       event.preventDefault();
       if (phase === "desktop") { setAppMenu(null); setWidgetMenu(null); setDockMenu(null); setContextMenu({ x: event.clientX, y: event.clientY }); }
     }}>
+      {!blockedHidden && (
+        <div className="blocked-overlay" aria-hidden="true">
+          <div className="blocked-container">
+            <div style={{ textAlign: "center" }}>
+              <p className="blocked-admin">Page Blocked by School Admin</p>
+              <img className="blocked-lock" src={asset("assets/gg-lock-icon.png")} width={54} height={80} alt="" />
+              <h2 className="blocked-message">Oops, this page has been blocked by your school.</h2>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="wallpaper-layer">
         {activeWallpaper.id === "vertex-studio"
           ? <VertexStudioWallpaper className="wallpaper-scene" />
