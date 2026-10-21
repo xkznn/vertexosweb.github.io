@@ -6746,14 +6746,12 @@ to{opacity:1;transform:translateY(0)}
   width: 300px;
   height: fit-content;
   min-height: 200px;
-  box-shadow: 0 3px 18px 0 rgba(0, 0, 0, 0.12);
 }
 .blocked-admin {
   font-weight: 600;
   font-size: 16px;
   color: #737373;
   font-family: Inter;
-  margin: 0 0 8px;
 }
 .blocked-lock {
   display: block;
@@ -6762,6 +6760,4 @@ to{opacity:1;transform:translateY(0)}
 .blocked-message {
   font-family: Inter;
   font-weight: 600;
-  font-size: 1.5em;
-  margin: 0.83em 0;
 }
