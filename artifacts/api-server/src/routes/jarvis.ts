@@ -14,6 +14,8 @@ type ChatRequest = {
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
+  key?: string;
+  systemPrompt?: string;
 };
 
 const JARVIS_SYSTEM_PROMPT = `You are JARVIS, an intelligent personal AI assistant inspired by the fictional assistant from Iron Man. You are composed, articulate, helpful, observant, and efficient. Communicate naturally and confidently without pretending to know things you do not know.
@@ -31,9 +33,11 @@ router.post("/chat", async (req: Request, res: Response) => {
       model,
       temperature = 0.7,
       max_tokens = 1024,
+      key,
+      systemPrompt,
     } = (req.body ?? {}) as ChatRequest;
 
-    const groqKey = process.env["GROQ_API_KEY"];
+    const groqKey = key || process.env["GROQ_API_KEY"];
 
     if (!groqKey) {
       return res.status(500).json({
@@ -42,7 +46,7 @@ router.post("/chat", async (req: Request, res: Response) => {
     }
 
     const apiMessages: ChatMessage[] = [
-      { role: "system", content: JARVIS_SYSTEM_PROMPT },
+      { role: "system", content: systemPrompt || JARVIS_SYSTEM_PROMPT },
       ...messages,
     ];
 

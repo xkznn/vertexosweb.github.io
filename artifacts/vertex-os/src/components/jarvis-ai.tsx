@@ -34,6 +34,15 @@ type VoiceProfile = {
   url: string;
 };
 
+type AgentProfile = {
+  id: string;
+  name: string;
+  provider: string;
+  model: string;
+  key: string;
+  systemPrompt?: string;
+};
+
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
@@ -56,6 +65,14 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
     }
   });
   const [activeVoiceId, setActiveVoiceId] = useState<string>(() => localStorage.getItem("jarvis_voice_active") || "");
+  const [agents, setAgents] = useState<AgentProfile[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("jarvis_agents") || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [activeAgentId, setActiveAgentId] = useState<string>(() => localStorage.getItem("jarvis_agent_active") || "");
   const [calMonth, setCalMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -175,10 +192,11 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
         localStorage.setItem("jarvis_tasks", JSON.stringify(tasks));
         (async () => {
           try {
+            const agent = agents.find((a) => a.id === activeAgentId);
             const res = await fetch("/api/jarvis/chat", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ messages: [{ role: "user", content: `Research and give detailed findings: ${text}` }] }),
+              body: JSON.stringify({ messages: [{ role: "user", content: `Research and give detailed findings: ${text}` }], ...(agent ? { key: agent.key || undefined, model: agent.model || undefined, systemPrompt: agent.systemPrompt || undefined } : {}) }),
             });
             const data = await res.json();
             const t3 = JSON.parse(localStorage.getItem("jarvis_tasks") || "[]");
@@ -222,7 +240,7 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
       }
       return null;
     },
-    [speakResponse]
+    [speakResponse, agents, activeAgentId]
   );
 
   const processQuery = useCallback(
@@ -249,7 +267,8 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
           ...msgs.slice(-12).map((m) => ({ role: m.role === "ai" ? ("assistant" as const) : ("user" as const), content: m.text })),
           { role: "user" as const, content: text },
         ];
-        const res = await fetch("/api/jarvis/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: history }) });
+        const agent = agents.find((a) => a.id === activeAgentId);
+        const res = await fetch("/api/jarvis/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: history, ...(agent ? { key: agent.key || undefined, model: agent.model || undefined, systemPrompt: agent.systemPrompt || undefined } : {}) }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "Chat failed");
         const reply = data.content || "";
@@ -262,7 +281,7 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
         setState("idle");
       }
     },
-    [handleAction, msgs, speakResponse]
+    [handleAction, msgs, speakResponse, agents, activeAgentId]
   );
 
   const sendText = useCallback(async () => {
@@ -494,6 +513,7 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
                 <div style={{ fontSize: 9, opacity: 0.6, letterSpacing: 2, marginTop: 6 }}>MIC: {state === "listening" ? "ACTIVE" : "IDLE"}</div>
                 <div style={{ fontSize: 9, opacity: 0.6, letterSpacing: 2 }}>TTS: {voiceOn ? "ENABLED" : "DISABLED"}</div>
                 <div style={{ fontSize: 9, opacity: 0.6, letterSpacing: 2 }}>CONNECTION: GROQ/TTS</div>
+                <div style={{ fontSize: 9, opacity: 0.7, letterSpacing: 2, color: "#7fd8ff" }}>AGENT: {(agents.find((a) => a.id === activeAgentId)?.name || "JARVIS CORE").toUpperCase()}</div>
                 <div style={{ fontSize: 9, opacity: 0.5, letterSpacing: 2, marginTop: 10 }}>WEATHER: CLEAR</div>
                 <div style={{ fontSize: 9, opacity: 0.5, letterSpacing: 2 }}>LOCATION: HOME</div>
                 <div style={{ fontSize: 9, opacity: 0.5, letterSpacing: 2 }}>NETWORK: EXCELLENT</div>
@@ -662,13 +682,16 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
               <div style={{ fontSize: 12, letterSpacing: 6 }}>AGENTS</div>
               <button
                 onClick={() => {
-                  const name = prompt("Agent name (e.g., Claude)");
+                  const name = prompt("Agent name (e.g., Groq)");
                   if (!name) return;
+                  const provider = prompt("Provider (groq, openai, anthropic, custom)", "groq") || "groq";
                   const key = prompt("API key (leave blank to use env)");
                   const model = prompt("Model (optional)");
+                  const systemPrompt = prompt("System prompt / personality (optional)") || undefined;
                   const agents = JSON.parse(localStorage.getItem("jarvis_agents") || "[]");
-                  agents.push({ id: Date.now().toString(), name, key: key || "", model: model || "", provider: name.toLowerCase().includes("claude") ? "anthropic" : name.toLowerCase().includes("openai") ? "openai" : "custom" });
+                  agents.push({ id: Date.now().toString(), name, provider, key: key || "", model: model || "", systemPrompt });
                   localStorage.setItem("jarvis_agents", JSON.stringify(agents));
+                  setAgents(agents);
                   alert("Agent added");
                 }}
                 style={{ background: "rgba(0, 190, 255, 0.35)", border: "1px solid rgba(0, 220, 255, 0.7)", color: "#c9eeff", padding: "6px 10px", borderRadius: 4, cursor: "pointer", fontSize: 11, letterSpacing: 2 }}
@@ -677,18 +700,52 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
               </button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-              {[
-                { name: "JARVIS CORE", status: "ACTIVE", desc: "Built-in system agent" },
-                ...(JSON.parse(localStorage.getItem("jarvis_agents") || "[]") as any[]).map((a) => ({ name: a.name.toUpperCase(), status: "CONFIGURED", desc: `${a.provider}${a.model ? " • " + a.model : ""}${a.key ? " • API KEY SET" : " • ENV"}` })),
-              ].map((a, i) => (
-                <div key={i} style={{ border: "1px solid rgba(0, 200, 255, 0.4)", background: "rgba(0, 30, 60, 0.4)", padding: 12, borderRadius: 4, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 12, letterSpacing: 4 }}>{a.name}</div>
-                    <div style={{ fontSize: 9, letterSpacing: 2, color: a.status === "ACTIVE" ? "#4dffb5" : "#7aa2ff" }}>{a.status}</div>
-                  </div>
-                  <div style={{ fontSize: 10, opacity: 0.6 }}>{a.desc}</div>
+              <div style={{ border: `1px solid ${activeAgentId ? "rgba(0, 200, 255, 0.4)" : "rgba(0, 230, 255, 0.9)"}`, background: activeAgentId ? "rgba(0, 30, 60, 0.4)" : "rgba(0, 60, 110, 0.5)", padding: 12, borderRadius: 4, display: "flex", flexDirection: "column", gap: 6, boxShadow: activeAgentId ? "none" : "0 0 24px rgba(0, 200, 255, 0.35)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div style={{ fontSize: 12, letterSpacing: 4 }}>JARVIS CORE</div>
+                  <div style={{ fontSize: 9, letterSpacing: 2, color: activeAgentId ? "#7aa2ff" : "#4dffb5" }}>{activeAgentId ? "AVAILABLE" : "ACTIVE"}</div>
                 </div>
-              ))}
+                <div style={{ fontSize: 10, opacity: 0.6 }}>Built-in system agent</div>
+                <button
+                  disabled={!activeAgentId}
+                  onClick={() => { localStorage.setItem("jarvis_agent_active", ""); setActiveAgentId(""); }}
+                  style={{ marginTop: 4, background: "rgba(0, 190, 255, 0.35)", border: "1px solid rgba(0, 220, 255, 0.7)", color: "#c9eeff", padding: "5px 8px", borderRadius: 4, cursor: activeAgentId ? "pointer" : "default", fontSize: 10, letterSpacing: 2, opacity: activeAgentId ? 1 : 0.5 }}
+                >
+                  USE
+                </button>
+              </div>
+              {agents.map((a) => {
+                const active = activeAgentId === a.id;
+                return (
+                  <div key={a.id} style={{ border: `1px solid ${active ? "rgba(0, 230, 255, 0.9)" : "rgba(0, 200, 255, 0.4)"}`, background: active ? "rgba(0, 60, 110, 0.5)" : "rgba(0, 30, 60, 0.4)", padding: 12, borderRadius: 4, display: "flex", flexDirection: "column", gap: 6, boxShadow: active ? "0 0 24px rgba(0, 200, 255, 0.35)" : "none" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <div style={{ fontSize: 12, letterSpacing: 4 }}>{a.name.toUpperCase()}</div>
+                      <div style={{ fontSize: 9, letterSpacing: 2, color: active ? "#4dffb5" : "#7aa2ff" }}>{active ? "ACTIVE" : "CONFIGURED"}</div>
+                    </div>
+                    <div style={{ fontSize: 10, opacity: 0.6 }}>{`${a.provider}${a.model ? " • " + a.model : ""}${a.key ? " • API KEY SET" : " • ENV"}`}</div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                      <button
+                        disabled={active}
+                        onClick={() => { localStorage.setItem("jarvis_agent_active", a.id); setActiveAgentId(a.id); }}
+                        style={{ flex: 1, background: "rgba(0, 190, 255, 0.35)", border: "1px solid rgba(0, 220, 255, 0.7)", color: "#c9eeff", padding: "5px 8px", borderRadius: 4, cursor: active ? "default" : "pointer", fontSize: 10, letterSpacing: 2, opacity: active ? 0.5 : 1 }}
+                      >
+                        USE
+                      </button>
+                      <button
+                        onClick={() => {
+                          const next = agents.filter((x) => x.id !== a.id);
+                          localStorage.setItem("jarvis_agents", JSON.stringify(next));
+                          setAgents(next);
+                          if (active) { localStorage.setItem("jarvis_agent_active", ""); setActiveAgentId(""); }
+                        }}
+                        style={{ background: "rgba(255, 80, 80, 0.2)", border: "1px solid rgba(255, 120, 120, 0.7)", color: "#ffcccc", padding: "5px 8px", borderRadius: 4, cursor: "pointer", fontSize: 10, letterSpacing: 2 }}
+                      >
+                        DELETE
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
