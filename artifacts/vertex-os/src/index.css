@@ -6726,6 +6726,15 @@ to{opacity:1;transform:translateY(0)}
   .vs-console .vs-npc-volume { display: none; }
 }
 
+.blocked-frame {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+  z-index: 99999;
+  background-color: #c7e5ff;
+}
 .blocked-overlay {
   position: fixed;
   inset: 0;

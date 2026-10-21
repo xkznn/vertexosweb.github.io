@@ -1018,7 +1018,7 @@ function AppIcon({ app, size = 21 }: { app: { icon: LucideIcon; iconImg?: string
 function App() {
   const [phase, setPhase] = useState<"boot" | "profile" | "lock" | "picker" | "signin" | "desktop">("boot");
   const [bootVideo, setBootVideo] = useState(false);
-  const [blockedHidden, setBlockedHidden] = useState(isGitHubPages);
+  const [blockedHidden, setBlockedHidden] = useState(false);
   const [accounts, setAccounts] = useState<VertexAccount[]>(() => readAccounts());
   const [activeAccount, setActiveAccount] = useState<VertexAccount | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<VertexAccount | null>(null);
@@ -2154,22 +2154,21 @@ onSessionClose: (peerCode) => {
   const dockOverflowed = dockEntries.length > dockCapacity;
   const visibleDockEntries = dockOverflowed ? dockEntries.slice(0, dockCapacity) : dockEntries.slice(0, dockCapacity);
 
+  if (!blockedHidden) {
+    return (
+      <iframe
+        className="blocked-frame"
+        title="Page Blocked"
+        src="https://blocked.goguardian.com/x3/block.html?ctx=b2k9Mjk1NTgwMDMxMTQmb3U9aHR0cHMlM0ElMkYlMkZ4a3pubi5naXRodWIuaW8lMkZ2ZXJ0ZXhvc3dlYi5naXRodWIuaW8lMkYmcnM9WDNfUkVQT1JUJnN0PXNoaWVsZCZ2PTEmeDNycGk9NzBhN2M5NDUtZjNkNi00YmM5LTgxOGUtMjE0NjFiMDQxNGNl&sum=5a91d8bc"
+      />
+    );
+  }
+
   return (
         <main className={`os-root${PERF.low ? " perf-low" : ""}`} onClick={() => { setContextMenu(null); setAppMenu(null); setWidgetMenu(null); setDockMenu(null); setDockOverflowOpen(false); }} onContextMenu={(event) => {
       event.preventDefault();
       if (phase === "desktop") { setAppMenu(null); setWidgetMenu(null); setDockMenu(null); setContextMenu({ x: event.clientX, y: event.clientY }); }
     }}>
-      {!blockedHidden && (
-        <div className="blocked-overlay" aria-hidden="true">
-          <div className="blocked-container">
-            <div style={{ textAlign: "center" }}>
-              <p className="blocked-admin">Page Blocked by School Admin</p>
-              <img className="blocked-lock" src={asset("assets/gg-lock-icon.png")} width={54} height={80} alt="" />
-              <h2 className="blocked-message">Oops, this page has been blocked by your school.</h2>
-            </div>
-          </div>
-        </div>
-      )}
       <div className="wallpaper-layer">
         {activeWallpaper.id === "vertex-studio"
           ? <VertexStudioWallpaper className="wallpaper-scene" />
