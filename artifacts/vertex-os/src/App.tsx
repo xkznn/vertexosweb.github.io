@@ -1576,14 +1576,17 @@ onSessionClose: (peerCode) => {
     let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
     const prevHref = favicon?.href ?? "";
     const prevType = favicon?.type ?? "";
-    if (!favicon) {
-      favicon = document.createElement("link");
-      favicon.rel = "icon";
-      document.head.appendChild(favicon);
-    }
-    const modeIcon = mode === "iready" ? { href: asset("images/block-iready.ico"), type: "image/x-icon" } : mode === "classroom" ? { href: asset("images/block-classroom.png"), type: "image/png" } : { href: asset("assets/favicon.png"), type: "image/png" };
-    favicon.type = modeIcon.type;
-    favicon.href = modeIcon.href;
+    const setFavicon = (href: string, type: string) => {
+      document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"]').forEach((el) => el.remove());
+      const link = document.createElement("link");
+      link.rel = "icon";
+      link.type = type;
+      link.href = href;
+      document.head.appendChild(link);
+      return link;
+    };
+    const modeIcon = mode === "iready" ? { href: asset("images/block-iready.ico?v=2"), type: "image/x-icon" } : mode === "classroom" ? { href: asset("images/block-classroom.png?v=2"), type: "image/png" } : { href: asset("assets/favicon.png"), type: "image/png" };
+    setFavicon(modeIcon.href, modeIcon.type);
     let count = 0;
     const onKey = (event: KeyboardEvent) => {
       if (event.code === "Space" || event.key === " ") {
@@ -1592,7 +1595,7 @@ onSessionClose: (peerCode) => {
         if (count >= 5) {
           setBlockedHidden(true);
           document.title = prevTitle;
-          if (favicon) { favicon.href = prevHref || asset("vertex-hub-logo.png"); favicon.type = prevType || "image/png"; }
+          setFavicon(prevHref || asset("vertex-hub-logo.png"), prevType || "image/png");
         }
       }
     };
