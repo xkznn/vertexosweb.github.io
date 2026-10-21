@@ -1459,16 +1459,23 @@ onSessionClose: (peerCode) => {
   const [tabHidden, setTabHidden] = useState(false);
   useEffect(() => {
     if (!settings.tabHide) { setTabHidden(false); return; }
-    const onBlur = () => setTabHidden(true);
-    const onFocus = () => setTabHidden(false);
-    const onVis = () => setTabHidden(document.hidden);
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVis);
+    const sync = () => setTabHidden(document.hidden || document.visibilityState === "hidden" || !document.hasFocus());
+    const onHide = () => setTabHidden(true);
+    const onShow = () => sync();
+    sync();
+    window.addEventListener("blur", onHide);
+    window.addEventListener("focus", onShow);
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("pageshow", sync);
+    window.addEventListener("pagehide", onHide);
+    const poll = window.setInterval(sync, 250);
     return () => {
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVis);
+      window.clearInterval(poll);
+      window.removeEventListener("blur", onHide);
+      window.removeEventListener("focus", onShow);
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("pageshow", sync);
+      window.removeEventListener("pagehide", onHide);
     };
   }, [settings.tabHide]);
 
