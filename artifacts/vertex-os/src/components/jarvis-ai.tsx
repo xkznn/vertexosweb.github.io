@@ -47,6 +47,66 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
+const GROQ_MODELS = [
+  "qwen/qwen3.8-27b",
+  "openai/gpt-oss-20b",
+  "openai/gpt-oss-120b",
+];
+
+type ChatResult = { content: string; error?: string };
+
+async function callGroqDirect(
+  apiKey: string,
+  messages: { role: string; content: string }[],
+  model?: string
+): Promise<ChatResult> {
+  const models = [model, ...GROQ_MODELS].filter(Boolean) as string[];
+  let lastError = "";
+  for (const m of models) {
+    try {
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: m, messages, temperature: 0.7, max_tokens: 1024, stream: false }),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        const content = data?.choices?.[0]?.message?.content ?? "";
+        if (content) return { content };
+        lastError = "Empty response";
+        continue;
+      }
+      lastError = (await r.text().catch(() => "")) || `HTTP ${r.status}`;
+    } catch (e: any) {
+      lastError = e?.message || "network error";
+    }
+  }
+  return { content: "", error: lastError.slice(0, 160) };
+}
+
+async function callChat(
+  apiKey: string,
+  messages: { role: string; content: string }[],
+  model?: string
+): Promise<ChatResult> {
+  if (apiKey) return callGroqDirect(apiKey, messages, model);
+  try {
+    const res = await fetch("/api/jarvis/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, model }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { content: data?.content ?? "" };
+    }
+    const detail = await res.text().catch(() => "");
+    return { content: "", error: `Server ${res.status}. Add a Groq API key in AI Core or Agents.` };
+  } catch {
+    return { content: "", error: "No backend reachable. Add a Groq API key in AI Core (Key field)." };
+  }
+}
+
 export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void } = {}) {
   const [state, setState] = useState<State>("idle");
   const [voiceOn, setVoiceOn] = useState(true);
@@ -73,6 +133,7 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
     }
   });
   const [activeAgentId, setActiveAgentId] = useState<string>(() => localStorage.getItem("jarvis_agent_active") || "");
+  const [coreKey, setCoreKey] = useState<string>(() => localStorage.getItem("jarvis_core_key") || (import.meta.env.VITE_GROQ_API_KEY as string) || "");
   const [calMonth, setCalMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -147,32 +208,52 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
           window.speechSynthesis.speak(utter);
           return;
         }
+        const ttsBody = JSON.stringify({ text, provider, key: vkey, model: vmodel, reference_id: vref, url: vurl });
+        let blob: Blob | null = null;
+        let ttsError = "";
         try {
           const tts = await fetch("/api/jarvis/tts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, provider, key: vkey, model: vmodel, reference_id: vref, url: vurl }),
+            body: ttsBody,
           });
           if (tts.ok) {
-            const blob = await tts.blob();
-            if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
-            const url = URL.createObjectURL(blob);
-            audioUrlRef.current = url;
-            if (audioRef.current) {
-              audioRef.current.src = url;
-              await audioRef.current.play().catch(() => {});
-              return;
-            }
+            blob = await tts.blob();
           } else {
             const data = await tts.json().catch(() => ({}));
-            setError(`Voice "${active.name}" failed: ${data?.details || data?.error || tts.status}. Check AI Core voice settings.`);
-            setState("idle");
+            ttsError = data?.details || data?.error || `HTTP ${tts.status}`;
+          }
+        } catch {
+          ttsError = "no-backend";
+        }
+        if (!blob && ttsError === "no-backend" && provider === "fish" && vkey) {
+          try {
+            const direct = await fetch(vurl || "https://api.fish.audio/v1/tts", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${vkey}`, "Content-Type": "application/json", model: vmodel || "s2.1-pro" },
+              body: JSON.stringify({ text, format: "mp3", ...(vref ? { reference_id: vref } : {}) }),
+            });
+            if (direct.ok) {
+              blob = await direct.blob();
+            } else {
+              ttsError = (await direct.text().catch(() => "")) || `HTTP ${direct.status}`;
+            }
+          } catch (e: any) {
+            ttsError = e?.message || "network";
+          }
+        }
+        if (blob) {
+          if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+          const url = URL.createObjectURL(blob);
+          audioUrlRef.current = url;
+          if (audioRef.current) {
+            audioRef.current.src = url;
+            await audioRef.current.play().catch(() => {});
             return;
           }
-        } catch (e: any) {
-          setError(`Voice "${active.name}" error: ${e.message || "network"}`);
+        } else {
+          setError(`Voice "${active.name}" failed: ${String(ttsError).slice(0, 200)}. Falling back to browser voice.`);
           setState("idle");
-          return;
         }
       } catch (e: any) {
         setError(e.message || "TTS error");
@@ -193,19 +274,20 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
         (async () => {
           try {
             const agent = agents.find((a) => a.id === activeAgentId);
-            const res = await fetch("/api/jarvis/chat", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ messages: [{ role: "user", content: `Research and give detailed findings: ${text}` }], ...(agent ? { key: agent.key || undefined, model: agent.model || undefined, systemPrompt: agent.systemPrompt || undefined } : {}) }),
-            });
-            const data = await res.json();
+            const sysPrompt = agent?.systemPrompt || "You are J.A.R.V.I.S. Provide concise, detailed research findings.";
+            const result = await callChat(
+              agent?.key || coreKey,
+              [{ role: "system", content: sysPrompt }, { role: "user", content: `Research and give detailed findings: ${text}` }],
+              agent?.model
+            );
+            const reply = result.content || result.error || "Done";
             const t3 = JSON.parse(localStorage.getItem("jarvis_tasks") || "[]");
             const idx = t3.findIndex((x: any) => x.id === id);
-            if (idx >= 0) { t3[idx].status = "done"; t3[idx].action = "Research complete - findings below"; t3[idx].result = data?.content || "Done"; localStorage.setItem("jarvis_tasks", JSON.stringify(t3)); }
-            const aiMsg: Msg = { id: uid(), role: "ai", text: data?.content || "Done.", at: Date.now() };
+            if (idx >= 0) { t3[idx].status = "done"; t3[idx].action = "Research complete - findings below"; t3[idx].result = reply; localStorage.setItem("jarvis_tasks", JSON.stringify(t3)); }
+            const aiMsg: Msg = { id: uid(), role: "ai", text: reply, at: Date.now() };
             setMsgs((p) => [...p, aiMsg]);
-            setResponse(data?.content || "Done.");
-            await speakResponse(data?.content || "Done.");
+            setResponse(reply);
+            await speakResponse(reply);
           } catch {}
         })();
         return null;
@@ -240,7 +322,7 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
       }
       return null;
     },
-    [speakResponse, agents, activeAgentId]
+    [speakResponse, agents, activeAgentId, coreKey]
   );
 
   const processQuery = useCallback(
@@ -268,10 +350,10 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
           { role: "user" as const, content: text },
         ];
         const agent = agents.find((a) => a.id === activeAgentId);
-        const res = await fetch("/api/jarvis/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: history, ...(agent ? { key: agent.key || undefined, model: agent.model || undefined, systemPrompt: agent.systemPrompt || undefined } : {}) }) });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "Chat failed");
-        const reply = data.content || "";
+        if (agent?.systemPrompt) history[0].content = agent.systemPrompt;
+        const result = await callChat(agent?.key || coreKey, history, agent?.model);
+        if (!result.content && result.error) throw new Error(result.error);
+        const reply = result.content || "";
         const aiMsg: Msg = { id: uid(), role: "ai", text: reply, at: Date.now() };
         setMsgs((p) => [...p, aiMsg]);
         setResponse(reply);
@@ -281,7 +363,7 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
         setState("idle");
       }
     },
-    [handleAction, msgs, speakResponse, agents, activeAgentId]
+    [handleAction, msgs, speakResponse, agents, activeAgentId, coreKey]
   );
 
   const sendText = useCallback(async () => {
@@ -564,6 +646,45 @@ export function JarvisSurface({ onOpenApp }: { onOpenApp?: (id: string) => void 
           <div style={{ flex: 1, overflow: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ fontSize: 12, letterSpacing: 6 }}>AI CORE</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
+              <div style={{ border: "1px solid rgba(0, 200, 255, 0.4)", background: "rgba(0, 30, 60, 0.4)", padding: 12, borderRadius: 4, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: 11, letterSpacing: 3 }}>CORE BRAIN (GROQ API KEY)</div>
+                <div style={{ fontSize: 9, opacity: 0.6, letterSpacing: 1 }}>Powers the default JARVIS CORE. Required on static hosting (GitHub Pages, Vercel, Netlify, Cloudflare, Firebase) where there is no backend. Get a free key at console.groq.com.</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ fontSize: 9, opacity: 0.6, letterSpacing: 2 }}>GROQ API KEY</div>
+                  <input id="jarvis-core-key" type="password" defaultValue={coreKey} placeholder="gsk_..." style={{ background: "rgba(0, 30, 60, 0.6)", border: "1px solid rgba(0, 200, 255, 0.5)", color: "#c9eeff", padding: "6px 8px", borderRadius: 4, fontSize: 10 }} />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => {
+                        const k = (document.getElementById("jarvis-core-key") as HTMLInputElement)?.value.trim() || "";
+                        setCoreKey(k);
+                        if (k) localStorage.setItem("jarvis_core_key", k);
+                        else localStorage.removeItem("jarvis_core_key");
+                        setError(null);
+                      }}
+                      style={{ flex: 1, background: "rgba(0, 190, 255, 0.35)", border: "1px solid rgba(0, 220, 255, 0.7)", color: "#c9eeff", padding: "6px 8px", borderRadius: 4, cursor: "pointer", fontSize: 10, letterSpacing: 2 }}
+                    >
+                      SAVE KEY
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCoreKey("");
+                        localStorage.removeItem("jarvis_core_key");
+                        const el = document.getElementById("jarvis-core-key") as HTMLInputElement | null;
+                        if (el) el.value = "";
+                      }}
+                      style={{ background: "rgba(255, 90, 90, 0.25)", border: "1px solid rgba(255, 120, 120, 0.6)", color: "#ffd0d0", padding: "6px 10px", borderRadius: 4, cursor: "pointer", fontSize: 10, letterSpacing: 2 }}
+                    >
+                      CLEAR
+                    </button>
+                  </div>
+                  {coreKey ? (
+                    <div style={{ fontSize: 9, color: "#4dffb5", letterSpacing: 2 }}>● KEY SET — CORE ONLINE</div>
+                  ) : (
+                    <div style={{ fontSize: 9, color: "#ffcf6b", letterSpacing: 2 }}>△ NO KEY — CORE USES DEMO MODE LOCALLY ONLY</div>
+                  )}
+                </div>
+              </div>
+
               <div style={{ border: "1px solid rgba(0, 200, 255, 0.4)", background: "rgba(0, 30, 60, 0.4)", padding: 12, borderRadius: 4, display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ fontSize: 11, letterSpacing: 3 }}>VOICE CONFIGURATION</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
